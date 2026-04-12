@@ -1,0 +1,17 @@
+{
+  "name": "cmr-svelte-demo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0"
+  },
+  "dependencies": {
+    "@sveltejs/vite-plugin-svelte": "^4.0.4",
+    "vite": "^5.4.19",
+    "svelte": "^5.38.7"
+  },
+  "devDependencies": {}
+}
