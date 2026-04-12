@@ -8,6 +8,7 @@
   import Landmark from 'lucide-svelte/icons/landmark';
 
   let { userName = $bindable(), password = $bindable(), onLogin } = $props();
+  const homeHref = import.meta.env.BASE_URL;
 
   const features = [
     {
@@ -53,7 +54,7 @@
       <!-- Top bar: full width so the row below (hero | card) shares the same vertical start -->
       <header class="mb-8 flex shrink-0 items-center justify-between gap-4 lg:mb-10">
         <a
-          href="/"
+          href={homeHref}
           class="group flex items-center gap-3 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-sky-400/50"
         >
           <span
@@ -173,7 +174,7 @@
               class="mt-auto flex flex-col gap-2 border-t border-zinc-100 pt-4 sm:flex-row sm:items-center sm:justify-between"
             >
               <a
-                href="/"
+                href={homeHref}
                 class="text-center text-sm font-semibold text-leah-800 hover:text-leah-900 hover:underline sm:text-left"
               >
                 Forgot password?
