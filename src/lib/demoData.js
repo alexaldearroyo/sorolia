@@ -1,6 +1,6 @@
 export const workspace = {
   company: 'Voltstack Europe GmbH',
-  tagline: 'Leah · Finance workspace',
+  tagline: 'Lia · Finance workspace',
   short: 'Voltstack',
   env: 'Demo'
 };

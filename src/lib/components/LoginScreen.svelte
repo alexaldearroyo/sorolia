@@ -13,12 +13,12 @@
     {
       icon: Wallet,
       title: 'Cash & receivables',
-      text: 'See what is owed, what is at risk and what you have already collected — without chart clutter on the login page.'
+      text: 'See what is owed, what is at risk and what you have already collected at a glance.'
     },
     {
       icon: Layers,
       title: 'List and kanban invoices',
-      text: 'Work the way modern finance teams expect: dense lists, boards and exports in one workspace.'
+      text: 'Dense lists, kanban boards and exports in one workspace.'
     },
     {
       icon: ShieldCheck,
@@ -63,7 +63,7 @@
             <Landmark class="h-6 w-6 text-white" strokeWidth={2.25} />
           </span>
           <span class="text-left">
-            <span class="block text-lg font-extrabold tracking-tight text-white">Leah</span>
+            <span class="block text-lg font-extrabold tracking-tight text-white">Lia</span>
             <span class="text-xs font-medium text-sky-200/75">Finance workspace</span>
           </span>
         </a>
@@ -75,8 +75,8 @@
         </span>
       </header>
 
-      <div class="grid min-w-0 flex-1 gap-10 lg:grid-cols-2 lg:items-start lg:gap-14 xl:gap-16">
-        <!-- Hero: top aligns with sign-in card (same grid row, items-start) -->
+      <div class="grid min-w-0 flex-1 gap-10 lg:grid-cols-2 lg:items-stretch lg:gap-14 xl:gap-16">
+        <!-- Hero: shares row height with sign-in card (items-stretch) -->
         <div class="min-w-0 max-w-xl lg:max-w-none">
           <p
             class="mb-4 inline-flex w-fit items-center gap-2 rounded-full border border-sky-400/20 bg-sky-500/[0.08] px-3 py-1 text-xs font-semibold text-sky-100"
@@ -100,8 +100,7 @@
           </h1>
 
           <p class="mt-5 max-w-xl text-pretty text-base leading-relaxed text-sky-100/70 sm:text-lg">
-            One workspace for collections, invoices and spend — with the same density and shortcuts teams expect from serious
-            business software.
+            One workspace for collections, invoices and spend — with lists, shortcuts and exports tuned for month-end work.
           </p>
 
           <ul class="mt-10 max-w-xl space-y-4" aria-label="Highlights">
@@ -127,9 +126,11 @@
         </div>
 
         <!-- Sign-in only: no dashboard preview or charts on the marketing surface -->
-        <div class="mx-auto w-full max-w-md lg:mx-0 lg:max-w-none lg:justify-self-end lg:pl-4 xl:pl-8">
+        <div
+          class="mx-auto flex w-full max-w-md flex-col lg:mx-0 lg:h-full lg:max-w-none lg:justify-self-end lg:pl-4 xl:pl-8"
+        >
           <section
-            class="rounded-2xl border border-zinc-200/80 bg-white p-6 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.35)] sm:p-8"
+            class="flex flex-1 flex-col rounded-2xl border border-zinc-200/80 bg-white p-6 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.35)] sm:p-8"
             aria-labelledby="login-heading"
           >
             <h2 id="login-heading" class="text-xl font-bold tracking-tight text-zinc-900">Sign in</h2>
@@ -169,7 +170,7 @@
             </button>
 
             <div
-              class="mt-4 flex flex-col gap-2 border-t border-zinc-100 pt-4 sm:flex-row sm:items-center sm:justify-between"
+              class="mt-auto flex flex-col gap-2 border-t border-zinc-100 pt-4 sm:flex-row sm:items-center sm:justify-between"
             >
               <a
                 href="/"
@@ -188,6 +189,6 @@
   <footer
     class="relative z-10 border-t border-white/[0.06] px-5 py-4 text-center text-[11px] text-sky-200/40 sm:px-8 sm:text-xs"
   >
-    Leah · front-end demo · {new Date().getFullYear()}
+    Lia · front-end demo · {new Date().getFullYear()}
   </footer>
 </div>

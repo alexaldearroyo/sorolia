@@ -9,7 +9,7 @@ export function statusBadgeClass(status) {
     case 'open':
       return 'bg-amber-100 text-amber-950 ring-amber-300/80';
     case 'paid':
-      return 'bg-sky-100 text-sky-950 ring-sky-300/80';
+      return 'bg-green-50 text-sky-950 ring-sky-300/80';
     case 'overdue':
       return 'bg-rose-100 text-rose-950 ring-rose-300/80';
     default:
