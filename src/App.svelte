@@ -95,17 +95,7 @@
 </script>
 
 {#if !loggedIn}
-  <LoginScreen
-    bind:userName
-    bind:password
-    onLogin={() => (loggedIn = true)}
-    {totals}
-    {openCount}
-    {overdueCount}
-    invoiceCount={invoiceRows.length}
-    {cashMonthly}
-    {currency}
-  />
+  <LoginScreen bind:userName bind:password onLogin={() => (loggedIn = true)} />
 {:else}
   <div class="flex h-screen min-h-0 flex-col bg-zinc-100">
     <TopBar
