@@ -2,7 +2,7 @@
   import Download from 'lucide-svelte/icons/download';
   import Plus from 'lucide-svelte/icons/plus';
 
-  let { userName, pageTitle, onNewInvoice } = $props();
+  let { userName, pageTitle, onNewInvoice, onExportWorkspace } = $props();
 </script>
 
 <div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -14,9 +14,10 @@
     <button
       type="button"
       class="inline-flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-4 py-2.5 text-sm font-semibold text-leah-900 shadow-sm hover:bg-zinc-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-leah-700"
+      onclick={onExportWorkspace}
     >
       <Download class="h-4 w-4" aria-hidden="true" />
-      Export
+      Export workspace
     </button>
     <button
       type="button"

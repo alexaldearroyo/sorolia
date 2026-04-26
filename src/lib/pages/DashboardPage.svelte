@@ -1,5 +1,9 @@
 <script>
   import FileText from 'lucide-svelte/icons/file-text';
+  import Users from 'lucide-svelte/icons/users';
+  import Package from 'lucide-svelte/icons/package';
+  import FolderKanban from 'lucide-svelte/icons/folder-kanban';
+  import Briefcase from 'lucide-svelte/icons/briefcase';
   import { statusBadgeClass } from '../format.js';
 
   let {
@@ -12,7 +16,14 @@
     cashBars,
     invoiceRows,
     currency,
-    onViewInvoices
+    onViewInvoices,
+    inventoryLowCount,
+    atRiskCustomers,
+    activeProjectsCount,
+    onGoCustomers,
+    onGoInventory,
+    onGoProjects,
+    onGoHR
   } = $props();
 </script>
 
@@ -37,6 +48,59 @@
     <strong class="mt-2 block text-2xl font-bold tracking-tight text-zinc-900">{currency(expenseTotal)}</strong>
     <small class="mt-1 block text-xs text-zinc-500">Posted · DATEV export ready</small>
   </article>
+</section>
+
+<section
+  class="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+  aria-label="Cross-module signals"
+>
+  <button
+    type="button"
+    class="flex flex-col gap-1 rounded-xl border border-zinc-200 bg-white p-4 text-left shadow-sm transition hover:border-leah-300 hover:bg-zinc-50"
+    onclick={onGoCustomers}
+  >
+    <span class="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-zinc-500">
+      <Users class="h-4 w-4 text-leah-800" aria-hidden="true" />
+      Customers
+    </span>
+    <span class="text-2xl font-extrabold text-zinc-900">{atRiskCustomers}</span>
+    <span class="text-xs text-zinc-500">accounts flagged at risk</span>
+  </button>
+  <button
+    type="button"
+    class="flex flex-col gap-1 rounded-xl border border-zinc-200 bg-white p-4 text-left shadow-sm transition hover:border-leah-300 hover:bg-zinc-50"
+    onclick={onGoInventory}
+  >
+    <span class="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-zinc-500">
+      <Package class="h-4 w-4 text-leah-800" aria-hidden="true" />
+      Inventory
+    </span>
+    <span class="text-2xl font-extrabold text-amber-700">{inventoryLowCount}</span>
+    <span class="text-xs text-zinc-500">SKUs at or below reorder</span>
+  </button>
+  <button
+    type="button"
+    class="flex flex-col gap-1 rounded-xl border border-zinc-200 bg-white p-4 text-left shadow-sm transition hover:border-leah-300 hover:bg-zinc-50"
+    onclick={onGoProjects}
+  >
+    <span class="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-zinc-500">
+      <FolderKanban class="h-4 w-4 text-leah-800" aria-hidden="true" />
+      Projects
+    </span>
+    <span class="text-2xl font-extrabold text-zinc-900">{activeProjectsCount}</span>
+    <span class="text-xs text-zinc-500">active or planning</span>
+  </button>
+  <button
+    type="button"
+    class="flex flex-col gap-1 rounded-xl border border-zinc-200 bg-white p-4 text-left shadow-sm transition hover:border-leah-300 hover:bg-zinc-50"
+    onclick={onGoHR}
+  >
+    <span class="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-zinc-500">
+      <Briefcase class="h-4 w-4 text-leah-800" aria-hidden="true" />
+      People
+    </span>
+    <span class="text-xs text-zinc-500">Delivery roster linked to PM</span>
+  </button>
 </section>
 
 <section class="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.85fr)]">
