@@ -20,7 +20,7 @@
     onclick={onToggleMobileNav}
     aria-expanded={mobileNavOpen}
     aria-controls="app-sidebar"
-    aria-label={mobileNavOpen ? 'Cerrar menú' : 'Abrir menú'}
+    aria-label={mobileNavOpen ? 'Close menu' : 'Open menu'}
   >
     {#if mobileNavOpen}
       <X class="h-5 w-5" strokeWidth={2} aria-hidden="true" />

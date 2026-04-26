@@ -92,7 +92,6 @@
 
   function remove() {
     if (!draftRow) return;
-    if (!window.confirm(`Delete expense “${draftRow.vendor}”?`)) return;
     onDelete(draftRow.id);
   }
 

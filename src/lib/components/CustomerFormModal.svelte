@@ -81,7 +81,6 @@
 
   function remove() {
     if (!draftRow) return;
-    if (!window.confirm(`Delete customer “${draftRow.name}”?`)) return;
     onDelete(draftRow.id);
   }
 

@@ -10,6 +10,28 @@
   let { userName = $bindable(), password = $bindable(), onLogin } = $props();
   const homeHref = import.meta.env.BASE_URL;
 
+  let nameError = $state('');
+  let showHint = $state(false);
+
+  function attemptLogin() {
+    const trimmed = userName.trim();
+    if (trimmed.length < 2) {
+      nameError = 'Enter your name (at least 2 characters) to open the demo.';
+      return;
+    }
+    nameError = '';
+    userName = trimmed;
+    onLogin();
+  }
+
+  function clearNameError() {
+    if (nameError) nameError = '';
+  }
+
+  function onKeydown(e) {
+    if (e.key === 'Enter') attemptLogin();
+  }
+
   const features = [
     {
       icon: Wallet,
@@ -64,7 +86,7 @@
             <Landmark class="h-6 w-6 text-white" strokeWidth={2.25} />
           </span>
           <span class="text-left">
-            <span class="block text-lg font-extrabold tracking-tight text-white">Lia</span>
+            <span class="block text-lg font-extrabold tracking-tight text-white">Emi</span>
             <span class="text-xs font-medium text-sky-200/75">Finance workspace</span>
           </span>
         </a>
@@ -141,26 +163,37 @@
               Name
               <input
                 bind:value={userName}
+                oninput={clearNameError}
+                onkeydown={onKeydown}
+                aria-invalid={nameError ? 'true' : 'false'}
+                aria-describedby={nameError ? 'login-name-error' : undefined}
                 aria-label="Name"
-                class="min-h-12 w-full rounded-xl border border-zinc-200 bg-white px-4 text-zinc-900 shadow-sm outline-none transition placeholder:text-zinc-400 focus:border-leah-700 focus:ring-4 focus:ring-leah-700/12"
+                class="min-h-12 w-full rounded-xl border bg-white px-4 text-zinc-900 shadow-sm outline-none transition placeholder:text-zinc-400 focus:ring-4 focus:ring-leah-700/12 {nameError
+                  ? 'border-rose-400 focus:border-rose-500'
+                  : 'border-zinc-200 focus:border-leah-700'}"
                 placeholder="e.g. Alex"
               />
+              {#if nameError}
+                <span id="login-name-error" class="text-xs font-medium text-rose-700">{nameError}</span>
+              {/if}
             </label>
             <label class="mt-4 grid gap-2 text-sm font-semibold text-zinc-700">
               Password
               <input
                 type="password"
                 bind:value={password}
+                onkeydown={onKeydown}
                 aria-label="Password"
                 autocomplete="current-password"
                 class="min-h-12 w-full rounded-xl border border-zinc-200 bg-white px-4 text-zinc-900 shadow-sm outline-none transition focus:border-leah-700 focus:ring-4 focus:ring-leah-700/12"
+                placeholder="any value works in the demo"
               />
             </label>
 
             <button
               type="button"
               class="group mt-6 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-leah-900 px-5 text-sm font-semibold text-white shadow-lg shadow-leah-900/20 transition hover:bg-leah-800 focus:outline-none focus-visible:ring-4 focus-visible:ring-leah-600/40"
-              onclick={onLogin}
+              onclick={attemptLogin}
             >
               <span>Open the demo</span>
               <ArrowRight
@@ -173,14 +206,24 @@
             <div
               class="mt-auto flex flex-col gap-2 border-t border-zinc-100 pt-4 sm:flex-row sm:items-center sm:justify-between"
             >
-              <a
-                href={homeHref}
+              <button
+                type="button"
                 class="text-center text-sm font-semibold text-leah-800 hover:text-leah-900 hover:underline sm:text-left"
+                onclick={() => (showHint = !showHint)}
+                aria-expanded={showHint}
               >
-                Forgot password?
-              </a>
+                {showHint ? 'Hide demo tip' : 'Forgot password?'}
+              </button>
               <span class="text-center text-xs text-zinc-400 sm:text-right">Demo · no backend</span>
             </div>
+            {#if showHint}
+              <p
+                class="mt-3 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs leading-relaxed text-sky-900"
+              >
+                There is no backend — any name with at least two characters and any password unlock the demo
+                workspace. Refreshing keeps your active page thanks to the URL hash.
+              </p>
+            {/if}
           </section>
         </div>
       </div>
@@ -190,6 +233,6 @@
   <footer
     class="relative z-10 border-t border-white/[0.06] px-5 py-4 text-center text-[11px] text-sky-200/40 sm:px-8 sm:text-xs"
   >
-    Lia · front-end demo · {new Date().getFullYear()}
+    Emi · front-end demo · {new Date().getFullYear()}
   </footer>
 </div>

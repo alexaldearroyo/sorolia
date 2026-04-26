@@ -19,17 +19,8 @@
 </script>
 
 <section class="rounded-xl border border-zinc-200/80 bg-white p-5 shadow-sm">
-  <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-    <div>
-      <h2 class="text-xl font-bold text-zinc-900">Project management</h2>
-      <p class="mt-1 text-sm text-zinc-500">
-        Budget vs paid invoices (same customer) · {totalProjects} initiatives
-      </p>
-    </div>
-  </div>
-
   {#if projectCustomerFilter}
-    <div class="mt-4 flex flex-wrap items-center gap-2">
+    <div class="flex flex-wrap items-center gap-2">
       <span class="text-xs font-medium text-zinc-500">Filtered by customer</span>
       <span
         class="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-900"
@@ -47,7 +38,16 @@
     </div>
   {/if}
 
-  <div class="mt-6 grid gap-4 md:grid-cols-2">
+  {#if projects.length === 0}
+    <div class="flex flex-col items-center justify-center gap-2 px-4 py-16 text-center">
+      <p class="text-base font-semibold text-zinc-800">No projects under this scope</p>
+      <p class="max-w-sm text-sm text-zinc-500">
+        Clear the customer filter to see every initiative, or add a project from the Customers view in a future demo.
+      </p>
+    </div>
+  {/if}
+
+  <div class="{projectCustomerFilter ? 'mt-6' : ''} grid gap-4 md:grid-cols-2">
     {#each projects as p}
       {@const spent = paidByCustomerId(p.customerId) ?? 0}
       {@const pct = p.budget > 0 ? Math.min(100, Math.round((spent / p.budget) * 100)) : 0}
@@ -67,6 +67,12 @@
         <p class="mt-1 text-sm text-zinc-500">
           Owner <span class="font-medium text-zinc-700">{p.owner}</span>
         </p>
+        {#if p.nextReview}
+          <p class="mt-2 text-xs font-medium text-zinc-600">
+            Next review <span class="font-mono text-zinc-800">{p.nextReview}</span>
+            <span class="text-zinc-400"> · shown on Calendar</span>
+          </p>
+        {/if}
         <button
           type="button"
           class="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-leah-800 hover:underline"
@@ -76,13 +82,18 @@
           {customerName(customers, p.customerId)}
         </button>
         <div class="mt-4">
-          <div class="flex justify-between text-xs font-medium text-zinc-500">
-            <span>Paid invoices (same customer)</span>
+          <div class="flex flex-wrap justify-between gap-2 text-xs font-medium text-zinc-500">
+            <span title="Sum of paid invoices for this customer in the demo dataset">
+              Customer revenue vs budget
+            </span>
             <span class="tabular-nums text-zinc-800">{currency(spent)} / {currency(p.budget)}</span>
           </div>
           <div class="mt-1 h-2 overflow-hidden rounded-full bg-zinc-200">
             <div class="h-full rounded-full bg-leah-700" style={`width:${pct}%`}></div>
           </div>
+          <p class="mt-1 text-[10px] text-zinc-400">
+            Demo proxy: paid invoices for this customer / project budget. Not project-level cost.
+          </p>
         </div>
         <button
           type="button"

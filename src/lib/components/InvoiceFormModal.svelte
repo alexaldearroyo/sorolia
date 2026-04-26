@@ -87,7 +87,6 @@
 
   function remove() {
     if (!draftRow) return;
-    if (!window.confirm(`Delete invoice ${draftRow.id}? This cannot be undone in the demo.`)) return;
     onDelete(draftRow.id);
   }
 

@@ -3,9 +3,10 @@
 </script>
 
 <section class="max-w-2xl rounded-xl border border-zinc-200/80 bg-white p-5 shadow-sm sm:p-8">
-  <h2 class="text-xl font-bold text-zinc-900">Settings</h2>
-  <p class="mt-2 text-sm text-zinc-500">
-    Company, taxes, sequences — UI stub, but counts mirror the interconnected demo workspace.
+  <p class="text-sm text-zinc-500">
+    Counts below mirror the interconnected demo workspace. On desktop, module jumps use
+    <kbd class="rounded border border-zinc-300 bg-zinc-100 px-1 font-mono text-xs">Alt</kbd>
+    + the letter shown on each sidebar item (only when focus is not in a text field).
   </p>
   <ul class="mt-6 grid gap-2 text-sm text-zinc-700">
     <li class="rounded-lg border border-zinc-100 bg-zinc-50 px-4 py-3">

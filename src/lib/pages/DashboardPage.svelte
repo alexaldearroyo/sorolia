@@ -4,10 +4,13 @@
   import Package from 'lucide-svelte/icons/package';
   import FolderKanban from 'lucide-svelte/icons/folder-kanban';
   import Briefcase from 'lucide-svelte/icons/briefcase';
+  import CalendarDays from 'lucide-svelte/icons/calendar-days';
   import { statusBadgeClass } from '../format.js';
+  import CashFlowChart from '../components/CashFlowChart.svelte';
 
   let {
     period = $bindable(),
+    chartLayout = $bindable(),
     totals,
     openCount,
     overdueCount,
@@ -20,11 +23,21 @@
     inventoryLowCount,
     atRiskCustomers,
     activeProjectsCount,
+    upcomingFortnight,
     onGoCustomers,
     onGoInventory,
     onGoProjects,
-    onGoHR
+    onGoHR,
+    onGoCalendar
   } = $props();
+
+  const periodLabel = $derived(
+    period === 'Monthly'
+      ? 'Last 6 closed months'
+      : period === 'Weekly'
+        ? 'April · weekly buckets'
+        : 'Quarterly · 4 buckets'
+  );
 </script>
 
 <section class="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Current status">
@@ -51,7 +64,7 @@
 </section>
 
 <section
-  class="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+  class="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
   aria-label="Cross-module signals"
 >
   <button
@@ -101,6 +114,18 @@
     </span>
     <span class="text-xs text-zinc-500">Delivery roster linked to PM</span>
   </button>
+  <button
+    type="button"
+    class="flex flex-col gap-1 rounded-xl border border-sky-200 bg-gradient-to-br from-sky-50 to-white p-4 text-left shadow-sm transition hover:border-sky-300"
+    onclick={onGoCalendar}
+  >
+    <span class="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-zinc-500">
+      <CalendarDays class="h-4 w-4 text-leah-800" aria-hidden="true" />
+      Calendar
+    </span>
+    <span class="text-2xl font-extrabold text-leah-900">{upcomingFortnight}</span>
+    <span class="text-xs text-zinc-500">items in the next 14 days</span>
+  </button>
 </section>
 
 <section class="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.85fr)]">
@@ -108,48 +133,53 @@
     <div class="flex flex-wrap items-start justify-between gap-4">
       <div>
         <h2 class="text-lg font-bold text-zinc-900">Cash movement</h2>
-        <p class="text-sm text-zinc-500">
-          {period === 'Monthly' ? 'Last 6 closed months · normalized stack' : 'April · weekly buckets'}
-        </p>
+        <p class="text-sm text-zinc-500">{periodLabel} · navy line = net pulse (in − out)</p>
       </div>
-      <button
-        type="button"
-        class="inline-flex items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm font-semibold text-leah-900 hover:bg-zinc-100"
-        onclick={() => (period = period === 'Monthly' ? 'Weekly' : 'Monthly')}
-      >
-        {period === 'Monthly' ? 'Monthly' : 'Weekly'}
-      </button>
-    </div>
-    <div class="mt-6 flex h-56 items-stretch gap-2 border-b border-zinc-200 pb-2 sm:gap-3" aria-label="Cash chart">
-      {#each cashBars as item}
-        <div class="flex min-w-0 flex-1 flex-col justify-end">
-          <div class="grid h-full grid-cols-3 items-end gap-1">
-            <span
-              class="min-h-[6px] rounded-t-md bg-sky-500"
-              style={`height:${item.income}%`}
-              title="Inflows"
-            ></span>
-            <span
-              class="min-h-[6px] rounded-t-md bg-rose-500"
-              style={`height:${item.expenses}%`}
-              title="Outflows"
-            ></span>
-            <span
-              class="min-h-[6px] rounded-t-md bg-amber-400"
-              style={`height:${item.pending}%`}
-              title="In transit"
-            ></span>
-          </div>
-          <small class="mt-2 block text-center text-[10px] font-medium leading-tight text-zinc-500 sm:text-xs">
-            {item.label}
-          </small>
+      <div class="flex flex-wrap items-center gap-2">
+        <div class="inline-flex rounded-lg border border-zinc-200 bg-zinc-50 p-0.5">
+          {#each ['Monthly', 'Weekly', 'Quarterly'] as opt}
+            <button
+              type="button"
+              class="rounded-md px-2.5 py-1.5 text-xs font-semibold sm:px-3 sm:text-sm {period === opt
+                ? 'bg-white text-leah-900 shadow-sm'
+                : 'text-zinc-600 hover:text-zinc-900'}"
+              onclick={() => (period = opt)}
+            >
+              {opt}
+            </button>
+          {/each}
         </div>
-      {/each}
+        <div class="inline-flex rounded-lg border border-zinc-200 bg-zinc-50 p-0.5">
+          <button
+            type="button"
+            class="rounded-md px-2.5 py-1.5 text-xs font-semibold sm:px-3 sm:text-sm {chartLayout === 'stacked'
+              ? 'bg-white text-leah-900 shadow-sm'
+              : 'text-zinc-600 hover:text-zinc-900'}"
+            onclick={() => (chartLayout = 'stacked')}
+          >
+            Stacked
+          </button>
+          <button
+            type="button"
+            class="rounded-md px-2.5 py-1.5 text-xs font-semibold sm:px-3 sm:text-sm {chartLayout === 'grouped'
+              ? 'bg-white text-leah-900 shadow-sm'
+              : 'text-zinc-600 hover:text-zinc-900'}"
+            onclick={() => (chartLayout = 'grouped')}
+          >
+            Grouped
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-4">
+      <CashFlowChart bars={cashBars} layout={chartLayout} {periodLabel} />
     </div>
     <div class="mt-4 flex flex-wrap gap-4 text-sm text-zinc-600">
       <span class="inline-flex items-center gap-2"><i class="h-2.5 w-2.5 rounded-full bg-sky-500"></i> Inflows</span>
       <span class="inline-flex items-center gap-2"><i class="h-2.5 w-2.5 rounded-full bg-rose-500"></i> Outflows</span>
       <span class="inline-flex items-center gap-2"><i class="h-2.5 w-2.5 rounded-full bg-amber-400"></i> In transit</span>
+      <span class="inline-flex items-center gap-2"><i class="h-2 w-2 rounded-full bg-[#132447]"></i> Net pulse</span>
     </div>
   </article>
 

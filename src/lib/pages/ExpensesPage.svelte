@@ -3,13 +3,29 @@
   import Download from 'lucide-svelte/icons/download';
   import Pencil from 'lucide-svelte/icons/pencil';
   import Trash2 from 'lucide-svelte/icons/trash-2';
+  import Receipt from 'lucide-svelte/icons/receipt';
   import { customerName } from '../workspaceActions.js';
   import ExpenseFormModal from '../components/ExpenseFormModal.svelte';
 
-  let { expenseItems, expenseTotal, customers, currency, onUpsertExpense, onDeleteExpense, onDownloadCsv } = $props();
+  let {
+    expenseEditor = $bindable(null),
+    expenseItems,
+    expenseTotal,
+    customers,
+    currency,
+    onUpsertExpense,
+    onDeleteExpense,
+    onDownloadCsv,
+    pendingExpenseEditId = null,
+    onConsumedExpenseDeepLink
+  } = $props();
 
-  /** @type {null | { mode: 'create' } | { mode: 'edit', id: string }} */
-  let expenseEditor = $state(null);
+  $effect(() => {
+    const id = pendingExpenseEditId;
+    if (!id) return;
+    expenseEditor = { mode: 'edit', id };
+    queueMicrotask(() => onConsumedExpenseDeepLink?.());
+  });
 
   let expenseDraft = $derived(
     expenseEditor?.mode === 'edit'
@@ -39,7 +55,6 @@
 
   function deleteFromModal(id) {
     onDeleteExpense(id);
-    closeEditor();
   }
 
   function submitQuick() {
@@ -67,11 +82,6 @@
     supplierId = '';
     type = 'General';
   }
-
-  function confirmDeleteRow(item) {
-    if (!window.confirm(`Delete expense “${item.vendor}”?`)) return;
-    onDeleteExpense(item.id);
-  }
 </script>
 
 <ExpenseFormModal
@@ -85,22 +95,7 @@
 
 <section class="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(260px,0.9fr)]">
   <article class="rounded-xl border border-zinc-200/80 bg-white p-5 shadow-sm">
-    <div class="flex flex-wrap items-start justify-between gap-4">
-      <div>
-        <h2 class="text-lg font-bold text-zinc-900">Expenses</h2>
-        <p class="text-sm text-zinc-500">Cost centers · modal CRUD + quick post with inline validation</p>
-      </div>
-      <button
-        type="button"
-        class="inline-flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-leah-900 shadow-sm hover:bg-zinc-50"
-        onclick={() => (expenseEditor = { mode: 'create' })}
-      >
-        <Plus class="h-4 w-4" aria-hidden="true" />
-        New expense
-      </button>
-    </div>
-
-    <div class="mt-6 rounded-xl border border-dashed border-zinc-300 bg-zinc-50/50 p-4">
+    <div class="rounded-xl border border-dashed border-zinc-300 bg-zinc-50/50 p-4">
       <p class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Quick post (demo)</p>
       <div class="mt-3 grid gap-3 sm:grid-cols-2">
         <label class="grid gap-1 text-sm font-medium text-zinc-700">
@@ -153,56 +148,77 @@
           </select>
         </label>
       </div>
-      <button
-        type="button"
-        class="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-leah-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-leah-950 sm:w-auto"
-        onclick={submitQuick}
-      >
-        <Plus class="h-4 w-4" aria-hidden="true" />
-        Add expense
-      </button>
+      <div class="mt-4 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          class="inline-flex items-center justify-center gap-2 rounded-lg bg-leah-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-leah-950"
+          onclick={submitQuick}
+        >
+          <Plus class="h-4 w-4" aria-hidden="true" />
+          Add expense
+        </button>
+        <button
+          type="button"
+          class="inline-flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-4 py-2.5 text-sm font-semibold text-leah-900 hover:bg-zinc-50"
+          onclick={() => (expenseEditor = { mode: 'create' })}
+        >
+          Open full form
+        </button>
+      </div>
     </div>
 
-    <ul class="mt-6 grid gap-2">
-      {#each expenseItems as item}
-        <li
-          class="flex flex-col gap-3 rounded-lg border border-zinc-100 bg-zinc-50/80 p-4 sm:flex-row sm:items-center sm:justify-between"
-        >
-          <div class="min-w-0 flex-1">
-            <span class="font-semibold text-zinc-900">{item.vendor}</span>
-            <span class="mt-0.5 block text-sm text-zinc-500">
-              {item.type} · {item.date}
-              {#if item.supplierCustomerId}
-                <span class="mt-1 block text-xs font-medium text-leah-800">
-                  Supplier: {customerName(customers, item.supplierCustomerId)}
-                </span>
-              {/if}
-            </span>
-          </div>
-          <div class="flex shrink-0 items-center gap-3">
-            <span class="text-lg font-bold tabular-nums text-zinc-900">{currency(item.amount)}</span>
-            <div class="flex gap-1">
-              <button
-                type="button"
-                class="rounded-md border border-zinc-200 bg-white p-2 text-zinc-700 hover:bg-zinc-50"
-                onclick={() => (expenseEditor = { mode: 'edit', id: item.id })}
-                aria-label="Edit expense"
-              >
-                <Pencil class="h-4 w-4" aria-hidden="true" />
-              </button>
-              <button
-                type="button"
-                class="rounded-md border border-rose-200 bg-white p-2 text-rose-800 hover:bg-rose-50"
-                onclick={() => confirmDeleteRow(item)}
-                aria-label="Delete expense"
-              >
-                <Trash2 class="h-4 w-4" aria-hidden="true" />
-              </button>
+    {#if expenseItems.length === 0}
+      <div class="mt-6 flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-zinc-200 bg-zinc-50/40 px-4 py-10 text-center">
+        <Receipt class="h-6 w-6 text-zinc-400" aria-hidden="true" />
+        <p class="text-sm font-semibold text-zinc-700">No expenses yet</p>
+        <p class="max-w-xs text-xs text-zinc-500">
+          Use the quick post above or hit “New expense” at the top of the page to add the first one.
+        </p>
+      </div>
+    {:else}
+      <ul class="mt-6 grid gap-2">
+        {#each expenseItems as item}
+          <li
+            class="flex flex-col gap-3 rounded-lg border border-zinc-100 bg-zinc-50/80 p-4 sm:flex-row sm:items-center sm:justify-between"
+          >
+            <div class="min-w-0 flex-1">
+              <span class="font-semibold text-zinc-900">{item.vendor}</span>
+              <span class="mt-0.5 block text-sm text-zinc-500">
+                {item.type} · {item.date}
+                {#if item.supplierCustomerId}
+                  <span class="mt-1 block text-xs font-medium text-leah-800">
+                    Supplier: {customerName(customers, item.supplierCustomerId)}
+                  </span>
+                {/if}
+              </span>
             </div>
-          </div>
-        </li>
-      {/each}
-    </ul>
+            <div class="flex shrink-0 items-center gap-3">
+              <span class="text-lg font-bold tabular-nums text-zinc-900">{currency(item.amount)}</span>
+              <div class="flex gap-1">
+                <button
+                  type="button"
+                  class="rounded-md border border-zinc-200 bg-white p-2 text-zinc-700 hover:bg-zinc-50"
+                  onclick={() => (expenseEditor = { mode: 'edit', id: item.id })}
+                  aria-label="Edit expense"
+                  title="Edit expense"
+                >
+                  <Pencil class="h-4 w-4" aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  class="rounded-md border border-rose-200 bg-white p-2 text-rose-800 hover:bg-rose-50"
+                  onclick={() => onDeleteExpense(item.id)}
+                  aria-label="Delete expense"
+                  title="Delete expense"
+                >
+                  <Trash2 class="h-4 w-4" aria-hidden="true" />
+                </button>
+              </div>
+            </div>
+          </li>
+        {/each}
+      </ul>
+    {/if}
   </article>
 
   <article

@@ -10,8 +10,6 @@
   >
     {userName.slice(0, 1).toUpperCase()}
   </div>
-  <h2 class="mt-4 text-xl font-bold text-zinc-900">My account</h2>
-  <p class="mt-2 text-sm text-zinc-500">Workspace snapshot tied to the same demo graph as Finance.</p>
   <p class="mt-6 text-sm text-zinc-700">Signed in as <strong>{userName}</strong></p>
 
   <dl class="mt-8 grid grid-cols-2 gap-3 text-left text-sm">

@@ -22,18 +22,18 @@
     return () => mq.removeEventListener('change', update);
   });
 
-  /** En móvil el drawer siempre muestra etiquetas; en escritorio respeta colapsado. */
+  /** Mobile drawer always shows labels; desktop respects the collapsed flag. */
   let showLabels = $derived(!isMd || !sidebarCollapsed);
 </script>
 
 <aside
   id="app-sidebar"
-  class="flex shrink-0 flex-col gap-4 border-r border-leah-800 bg-leah-900 p-3 text-white shadow-none transition-[transform,width] duration-200 ease-out md:relative md:z-auto md:gap-5 md:py-4 md:shadow-none {mobileNavOpen
+  class="flex shrink-0 flex-col gap-4 border-r border-leah-800 bg-leah-900 p-3 text-white shadow-none transition-[transform,width] duration-200 ease-out md:relative md:top-0 md:z-auto md:h-full md:min-h-0 md:max-w-none md:gap-5 md:self-stretch md:py-4 md:shadow-none {mobileNavOpen
     ? 'pointer-events-auto translate-x-0'
-    : 'pointer-events-none -translate-x-full'} fixed bottom-0 left-0 top-12 z-40 w-[min(18rem,88vw)] max-w-sm md:pointer-events-auto md:translate-x-0 {sidebarCollapsed
+    : 'pointer-events-none -translate-x-full'} fixed bottom-0 left-0 top-12 z-40 w-[min(18rem,88vw)] max-w-sm md:pointer-events-auto md:bottom-auto md:translate-x-0 {sidebarCollapsed
     ? 'md:w-14 md:overflow-hidden md:px-2'
     : 'md:w-56 md:px-3'}"
-  aria-label="Menú principal"
+  aria-label="Main navigation"
   inert={!isMd && !mobileNavOpen}
 >
   <button
@@ -51,7 +51,7 @@
     {/if}
   </button>
 
-  <nav class="grid grid-cols-1 gap-1" aria-label="Módulos">
+  <nav class="grid grid-cols-1 gap-1" aria-label="Modules">
     {#each menu as item}
       {@const Icon = item.icon}
       <button
@@ -113,8 +113,8 @@
         ? 'justify-center px-0'
         : 'px-3'}"
       onclick={() => (sidebarCollapsed = !sidebarCollapsed)}
-      aria-label={sidebarCollapsed ? 'Expandir barra lateral' : 'Contraer barra lateral'}
-      title={sidebarCollapsed ? 'Expandir barra lateral' : 'Contraer barra lateral'}
+      aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+      title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
     >
       {#if sidebarCollapsed}
         <ChevronRight class="h-4 w-4 shrink-0" aria-hidden="true" />

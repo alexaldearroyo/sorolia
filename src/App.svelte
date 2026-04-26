@@ -3,6 +3,7 @@
     workspace,
     cashMonthly,
     cashWeekly,
+    cashQuarterly,
     kanbanColumns,
     customersSeed,
     invoicesSeed,
@@ -11,6 +12,11 @@
     projectsSeed,
     employeesSeed
   } from './lib/demoData.js';
+  import {
+    collectWorkspaceEvents,
+    countEventsBetween,
+    isoKeyFromDate
+  } from './lib/calendarUtils.js';
   import { menu } from './lib/navigation.js';
   import { currency } from './lib/format.js';
   import { SIDEBAR_COLLAPSED_KEY, loadSidebarCollapsed } from './lib/sidebarStorage.js';
@@ -28,6 +34,8 @@
   import TopBar from './lib/components/TopBar.svelte';
   import AppSidebar from './lib/components/AppSidebar.svelte';
   import WorkspaceChrome from './lib/components/WorkspaceChrome.svelte';
+  import ConfirmModal from './lib/components/ConfirmModal.svelte';
+  import Plus from 'lucide-svelte/icons/plus';
   import DashboardPage from './lib/pages/DashboardPage.svelte';
   import InvoicesPage from './lib/pages/InvoicesPage.svelte';
   import ExpensesPage from './lib/pages/ExpensesPage.svelte';
@@ -37,11 +45,13 @@
   import InventoryPage from './lib/pages/InventoryPage.svelte';
   import ProjectsPage from './lib/pages/ProjectsPage.svelte';
   import HRPage from './lib/pages/HRPage.svelte';
+  import CalendarPage from './lib/pages/CalendarPage.svelte';
 
   let loggedIn = $state(false);
   let active = $state('home');
   let filter = $state('All');
   let period = $state('Monthly');
+  let chartLayout = $state('stacked');
   let userName = $state('Mate');
   let password = $state('demo');
   let invoiceView = $state('list');
@@ -51,8 +61,20 @@
   let invoiceCustomerFilter = $state(null);
   /** @type {null | { mode: 'create' } | { mode: 'edit', id: string }} */
   let invoiceEditor = $state(null);
+  /** @type {null | { mode: 'create' } | { mode: 'edit', id: string }} */
+  let expenseEditor = $state(null);
+  /** @type {null | { mode: 'create' } | { mode: 'edit', id: string }} */
+  let customerEditor = $state(null);
   let projectCustomerFilter = $state(null);
   let inventoryHighlightSupplierId = $state(null);
+  let pendingExpenseEditId = $state(null);
+
+  /** @type {null | import('./lib/components/ConfirmModal.svelte').ConfirmRequest} */
+  let confirmRequest = $state(null);
+
+  function requestConfirm(req) {
+    confirmRequest = req;
+  }
 
   let customers = $state(structuredClone(customersSeed));
   let invoices = $state(structuredClone(invoicesSeed));
@@ -61,7 +83,17 @@
   let projects = $state(structuredClone(projectsSeed));
   let employees = $state(structuredClone(employeesSeed));
 
-  let cashBars = $derived(period === 'Monthly' ? cashMonthly : cashWeekly);
+  let cashBars = $derived(
+    period === 'Monthly' ? cashMonthly : period === 'Weekly' ? cashWeekly : cashQuarterly
+  );
+
+  let upcomingFortnight = $derived.by(() => {
+    const ev = collectWorkspaceEvents(invoices, expenseItems, projects);
+    const now = new Date();
+    const end = new Date(now);
+    end.setDate(end.getDate() + 14);
+    return countEventsBetween(ev, isoKeyFromDate(now), isoKeyFromDate(end));
+  });
 
   let enrichedInvoices = $derived(enrichInvoices(invoices, customers));
 
@@ -138,6 +170,56 @@
           : menu.find((item) => item.id === active)?.label ?? active
   );
 
+  let pageSubtitle = $derived.by(() => {
+    switch (active) {
+      case 'home':
+        return 'Live workspace overview · same data graph as every module';
+      case 'invoices':
+        return `Customer invoices · EUR · ${invoices.length} in pipeline`;
+      case 'expenses':
+        return `Cost centers · ${expenseItems.length} postings · CSV export ready`;
+      case 'calendar':
+        return 'Invoice due dates · expense postings · project reviews';
+      case 'customers':
+        return `Master directory · AR and projects roll up here · ${customers.length} accounts`;
+      case 'inventory':
+        return `SKUs tied to supplier customers · ${inventory.length} lines`;
+      case 'projects':
+        return `Budget vs customer revenue · ${projects.length} initiatives`;
+      case 'hr':
+        return `People mapped to delivery projects · ${employees.length} profiles`;
+      case 'account':
+        return 'Workspace snapshot tied to the same demo graph as Finance';
+      case 'settings':
+        return 'Company, taxes, sequences — UI stub';
+      default:
+        return '';
+    }
+  });
+
+  /** @type {null | { label: string, icon?: any, onClick: () => void }} */
+  let primaryAction = $derived.by(() => {
+    switch (active) {
+      case 'home':
+      case 'invoices':
+        return { label: 'New invoice', icon: Plus, onClick: handleNewInvoice };
+      case 'expenses':
+        return {
+          label: 'New expense',
+          icon: Plus,
+          onClick: () => (expenseEditor = { mode: 'create' })
+        };
+      case 'customers':
+        return {
+          label: 'New customer',
+          icon: Plus,
+          onClick: () => (customerEditor = { mode: 'create' })
+        };
+      default:
+        return null;
+    }
+  });
+
   function selectPage(id, opts = {}) {
     active = id;
     mobileNavOpen = false;
@@ -160,6 +242,30 @@
     } else {
       inventoryHighlightSupplierId = null;
     }
+
+    if (id === 'expenses') {
+      pendingExpenseEditId = opts.expenseEditId ?? null;
+    } else {
+      pendingExpenseEditId = null;
+    }
+  }
+
+  function consumeExpenseDeepLink() {
+    pendingExpenseEditId = null;
+  }
+
+  function openCalendarInvoiceEdit(id) {
+    selectPage('invoices');
+    invoiceEditor = { mode: 'edit', id };
+  }
+
+  function openCalendarExpenseEdit(id) {
+    selectPage('expenses', { expenseEditId: id });
+  }
+
+  function openCalendarProjectById(pid) {
+    const p = projects.find((x) => x.id === pid);
+    selectPage('projects', { customerId: p?.customerId });
   }
 
   function paidForCustomer(customerId) {
@@ -184,8 +290,19 @@
   }
 
   function deleteInvoice(id) {
-    invoices = invoices.filter((i) => i.id !== id);
-    invoiceEditor = null;
+    const row = invoices.find((i) => i.id === id);
+    requestConfirm({
+      title: `Delete ${row?.id ?? 'invoice'}?`,
+      message: row
+        ? `${row.id} for ${customerName(customers, row.customerId)} will be removed from the demo workspace.`
+        : 'This invoice will be removed from the demo workspace.',
+      confirmLabel: 'Delete invoice',
+      tone: 'danger',
+      onConfirm: () => {
+        invoices = invoices.filter((i) => i.id !== id);
+        invoiceEditor = null;
+      }
+    });
   }
 
   function adjustInventoryQty(id, delta) {
@@ -214,7 +331,19 @@
   }
 
   function deleteExpense(id) {
-    expenseItems = expenseItems.filter((e) => e.id !== id);
+    const row = expenseItems.find((e) => e.id === id);
+    requestConfirm({
+      title: 'Delete expense?',
+      message: row
+        ? `“${row.vendor}” will be removed from the demo workspace.`
+        : 'This expense line will be removed from the demo workspace.',
+      confirmLabel: 'Delete expense',
+      tone: 'danger',
+      onConfirm: () => {
+        expenseItems = expenseItems.filter((e) => e.id !== id);
+        expenseEditor = null;
+      }
+    });
   }
 
   function upsertCustomer(payload) {
@@ -244,8 +373,8 @@
     }
   }
 
-  /** @returns {boolean} true if deleted */
   function deleteCustomerRecord(id) {
+    const row = customers.find((c) => c.id === id);
     if (
       customerHasReferences(id, {
         invoices,
@@ -254,13 +383,26 @@
         expenseItems
       })
     ) {
-      window.alert(
-        'Cannot delete this customer: it is still linked to invoices, projects, inventory lines or expenses. Remove or reassign those first.'
-      );
-      return false;
+      requestConfirm({
+        title: 'Customer is still linked',
+        message: `${row?.name ?? 'This customer'} is referenced by invoices, projects, inventory or expenses. Remove or reassign those records first.`,
+        confirmLabel: 'Got it',
+        cancelLabel: 'Close',
+        tone: 'info',
+        onConfirm: () => {}
+      });
+      return;
     }
-    customers = customers.filter((c) => c.id !== id);
-    return true;
+    requestConfirm({
+      title: `Delete ${row?.name ?? 'customer'}?`,
+      message: 'This customer will be removed from the demo workspace.',
+      confirmLabel: 'Delete customer',
+      tone: 'danger',
+      onConfirm: () => {
+        customers = customers.filter((c) => c.id !== id);
+        customerEditor = null;
+      }
+    });
   }
 
   function downloadWorkspaceJson() {
@@ -276,7 +418,7 @@
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'lia-workspace-export.json';
+    a.download = 'emi-workspace-export.json';
     a.click();
     URL.revokeObjectURL(a.href);
   }
@@ -286,7 +428,7 @@
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'lia-expenses.csv';
+    a.download = 'emi-expenses.csv';
     a.click();
     URL.revokeObjectURL(a.href);
   }
@@ -352,6 +494,60 @@
       /* private mode / quota */
     }
   });
+
+  const VALID_PAGES = new Set([
+    'home',
+    'invoices',
+    'expenses',
+    'calendar',
+    'customers',
+    'inventory',
+    'projects',
+    'hr',
+    'account',
+    'settings'
+  ]);
+
+  function readHashPage() {
+    if (typeof window === 'undefined') return null;
+    const raw = (window.location.hash || '').replace(/^#\/?/, '').trim();
+    if (!raw) return null;
+    return VALID_PAGES.has(raw) ? raw : null;
+  }
+
+  let routerBootstrapped = $state(false);
+
+  $effect(() => {
+    if (typeof window === 'undefined') return;
+    if (!loggedIn) return;
+    if (routerBootstrapped) return;
+    const fromHash = readHashPage();
+    if (fromHash && fromHash !== active) {
+      selectPage(fromHash);
+    } else {
+      window.history.replaceState(null, '', `#/${active}`);
+    }
+    routerBootstrapped = true;
+  });
+
+  $effect(() => {
+    if (typeof window === 'undefined') return;
+    const onHashChange = () => {
+      const next = readHashPage();
+      if (next && next !== active) selectPage(next);
+    };
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  });
+
+  $effect(() => {
+    if (typeof window === 'undefined') return;
+    if (!loggedIn) return;
+    const target = `#/${active}`;
+    if (window.location.hash !== target) {
+      window.history.replaceState(null, '', target);
+    }
+  });
 </script>
 
 {#if !loggedIn}
@@ -374,7 +570,7 @@
           type="button"
           class="fixed inset-0 z-30 bg-zinc-900/50 backdrop-blur-[1px] md:hidden"
           onclick={() => (mobileNavOpen = false)}
-          aria-label="Cerrar menú"
+          aria-label="Close menu"
         ></button>
       {/if}
 
@@ -384,13 +580,15 @@
         <WorkspaceChrome
           {userName}
           {pageTitle}
-          onNewInvoice={handleNewInvoice}
+          {pageSubtitle}
+          {primaryAction}
           onExportWorkspace={downloadWorkspaceJson}
         />
 
         {#if active === 'home'}
           <DashboardPage
             bind:period
+            bind:chartLayout
             {totals}
             {openCount}
             {overdueCount}
@@ -402,11 +600,13 @@
             {inventoryLowCount}
             {atRiskCustomers}
             {activeProjectsCount}
+            {upcomingFortnight}
             onViewInvoices={() => selectPage('invoices')}
             onGoCustomers={() => selectPage('customers')}
             onGoInventory={() => selectPage('inventory')}
             onGoProjects={() => selectPage('projects')}
             onGoHR={() => selectPage('hr')}
+            onGoCalendar={() => selectPage('calendar')}
           />
         {:else if active === 'invoices'}
           <InvoicesPage
@@ -421,7 +621,6 @@
             {invoiceEditor}
             invoiceDraftRow={invoiceDraftRow}
             onClearInvoiceCustomerFilter={() => (invoiceCustomerFilter = null)}
-            onOpenCreateInvoice={() => (invoiceEditor = { mode: 'create' })}
             onCloseInvoiceEditor={() => (invoiceEditor = null)}
             onSaveInvoiceCreate={saveInvoiceCreate}
             onSaveInvoiceUpdate={saveInvoiceUpdate}
@@ -430,6 +629,7 @@
           />
         {:else if active === 'expenses'}
           <ExpensesPage
+            bind:expenseEditor
             {expenseItems}
             {expenseTotal}
             {customers}
@@ -437,9 +637,21 @@
             onUpsertExpense={upsertExpense}
             onDeleteExpense={deleteExpense}
             onDownloadCsv={downloadExpensesCsv}
+            pendingExpenseEditId={pendingExpenseEditId}
+            onConsumedExpenseDeepLink={consumeExpenseDeepLink}
+          />
+        {:else if active === 'calendar'}
+          <CalendarPage
+            {invoices}
+            {expenseItems}
+            {projects}
+            onOpenInvoiceEdit={openCalendarInvoiceEdit}
+            onOpenExpenseEdit={openCalendarExpenseEdit}
+            onOpenProjectById={openCalendarProjectById}
           />
         {:else if active === 'customers'}
           <CustomersPage
+            bind:customerEditor
             {customers}
             {invoices}
             {projects}
@@ -487,4 +699,6 @@
       </main>
     </div>
   </div>
+
+  <ConfirmModal request={confirmRequest} onClose={() => (confirmRequest = null)} />
 {/if}

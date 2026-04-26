@@ -1,11 +1,11 @@
 export const workspace = {
   company: 'Voltstack Europe GmbH',
-  tagline: 'Lia · Finance workspace',
+  tagline: 'Emi · Finance workspace',
   short: 'Voltstack',
   env: 'Demo'
 };
 
-/** Catálogo maestro — facturas, proyectos y parte del gasto apuntan aquí. */
+/** Master catalog — invoices, projects and part of the expense ledger reference these IDs. */
 export const customersSeed = [
   { id: 'cust-1', name: 'Klärmann Stahlhandel GmbH', country: 'DE', segment: 'Industrial', health: 'At risk' },
   { id: 'cust-2', name: 'BioWerk Bayern AG', country: 'DE', segment: 'Food', health: 'Good' },
@@ -70,7 +70,7 @@ export const expenseItemsSeed = [
   }
 ];
 
-/** Stock enlazado a proveedor (cliente del catálogo). */
+/** Inventory tied to a supplier (a customer in the master catalog). */
 export const inventorySeed = [
   { id: 'sku-1', code: 'SWG-2400', name: 'HV switchgear cabinet', qty: 12, reorder: 8, supplierCustomerId: 'cust-1' },
   { id: 'sku-2', code: 'PLC-X1', name: 'Safety PLC module', qty: 4, reorder: 10, supplierCustomerId: 'cust-6' },
@@ -85,7 +85,8 @@ export const projectsSeed = [
     customerId: 'cust-3',
     status: 'Active',
     budget: 92000,
-    owner: 'Leni Vogt'
+    owner: 'Leni Vogt',
+    nextReview: '18/04/2026'
   },
   {
     id: 'pr-2',
@@ -93,7 +94,8 @@ export const projectsSeed = [
     customerId: 'cust-4',
     status: 'Active',
     budget: 24000,
-    owner: 'Jonas Brandt'
+    owner: 'Jonas Brandt',
+    nextReview: '22/04/2026'
   },
   {
     id: 'pr-3',
@@ -101,7 +103,8 @@ export const projectsSeed = [
     customerId: 'cust-6',
     status: 'Planning',
     budget: 180000,
-    owner: 'Mira Scholz'
+    owner: 'Mira Scholz',
+    nextReview: '28/04/2026'
   },
   {
     id: 'pr-4',
@@ -109,7 +112,8 @@ export const projectsSeed = [
     customerId: 'cust-5',
     status: 'On hold',
     budget: 45000,
-    owner: 'Elena Rossi'
+    owner: 'Elena Rossi',
+    nextReview: '05/05/2026'
   }
 ];
 
@@ -136,6 +140,14 @@ export const cashWeekly = [
   { label: '7–13 Apr', expenses: 44, income: 74, pending: 21 },
   { label: '14–20 Apr', expenses: 61, income: 62, pending: 35 },
   { label: '21–27 Apr', expenses: 48, income: 81, pending: 19 }
+];
+
+/** Four quarters · same 0–100 scale as the other cash demos. */
+export const cashQuarterly = [
+  { label: 'Q1', expenses: 33, income: 58, pending: 18 },
+  { label: 'Q2', expenses: 36, income: 64, pending: 22 },
+  { label: 'Q3', expenses: 31, income: 59, pending: 16 },
+  { label: 'Q4', expenses: 39, income: 67, pending: 26 }
 ];
 
 export const kanbanColumns = ['Offer', 'Open', 'Paid', 'Overdue'];

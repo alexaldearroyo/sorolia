@@ -12,17 +12,17 @@
 </script>
 
 <section class="rounded-xl border border-zinc-200/80 bg-white p-5 shadow-sm">
-  <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-    <div>
-      <h2 class="text-xl font-bold text-zinc-900">Human resources</h2>
-      <p class="mt-1 text-sm text-zinc-500">
-        People mapped to delivery projects (same graph as PM) · {employees.length} profiles
+  {#if employees.length === 0}
+    <div class="flex flex-col items-center justify-center gap-2 px-4 py-16 text-center">
+      <p class="text-base font-semibold text-zinc-800">No people in this workspace</p>
+      <p class="max-w-sm text-sm text-zinc-500">
+        People are tied to delivery projects in the demo seed. Reset demo data to repopulate the directory.
       </p>
     </div>
-  </div>
-
-  <div class="mt-6 overflow-x-auto rounded-lg border border-zinc-200">
+  {:else}
+  <div class="overflow-x-auto rounded-lg border border-zinc-200">
     <table class="w-full min-w-[520px] text-left text-sm">
+      <caption class="sr-only">Employees mapped to delivery projects</caption>
       <thead>
         <tr class="border-b border-zinc-200 bg-zinc-50 text-xs font-bold uppercase tracking-wide text-zinc-500">
           <th class="px-4 py-3" scope="col">Name</th>
@@ -56,4 +56,5 @@
       </tbody>
     </table>
   </div>
+  {/if}
 </section>
