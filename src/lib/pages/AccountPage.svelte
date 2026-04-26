@@ -2,7 +2,9 @@
   let { userName, onBack } = $props();
 </script>
 
-<section class="mx-auto max-w-lg rounded-xl border border-zinc-200/80 bg-white p-8 text-center shadow-sm">
+<section
+  class="mx-auto max-w-lg rounded-xl border border-zinc-200/80 bg-white p-5 text-center shadow-sm sm:p-8"
+>
   <div
     class="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-leah-900/10 text-2xl font-bold text-leah-800"
   >

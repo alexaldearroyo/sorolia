@@ -98,9 +98,13 @@
       </table>
     </div>
   {:else}
-    <div class="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+    <div
+      class="mt-6 flex snap-x snap-mandatory gap-4 overflow-x-auto pb-2 md:grid md:snap-none md:overflow-visible md:grid-cols-2 md:pb-0 xl:grid-cols-4"
+    >
       {#each kanbanColumns as col}
-        <div class="rounded-xl border border-zinc-200 bg-zinc-50/50 p-3">
+        <div
+          class="w-[min(100%,280px)] shrink-0 snap-start rounded-xl border border-zinc-200 bg-zinc-50/50 p-3 md:w-auto md:min-w-0 md:shrink"
+        >
           <h3 class="mb-3 text-xs font-bold uppercase tracking-wider text-zinc-500">{col}</h3>
           <div class="flex flex-col gap-2">
             {#each visibleInvoices.filter((inv) => inv.status === col) as invoice}

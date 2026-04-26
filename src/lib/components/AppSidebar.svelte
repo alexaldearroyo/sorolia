@@ -5,14 +5,36 @@
   import ChevronLeft from 'lucide-svelte/icons/chevron-left';
   import ChevronRight from 'lucide-svelte/icons/chevron-right';
 
-  let { menu, active, sidebarCollapsed = $bindable(), onSelect } = $props();
+  let { menu, active, mobileNavOpen = false, sidebarCollapsed = $bindable(), onSelect } = $props();
+
+  let isMd = $state(
+    typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches
+  );
+
+  $effect(() => {
+    if (typeof window === 'undefined') return;
+    const mq = window.matchMedia('(min-width: 768px)');
+    const update = () => {
+      isMd = mq.matches;
+    };
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  });
+
+  /** En móvil el drawer siempre muestra etiquetas; en escritorio respeta colapsado. */
+  let showLabels = $derived(!isMd || !sidebarCollapsed);
 </script>
 
 <aside
-  class="flex w-full shrink-0 flex-col gap-4 border-b border-leah-800 bg-leah-900 p-3 text-white transition-[width] duration-200 ease-out md:gap-5 md:border-b-0 md:border-r md:border-leah-800 md:py-4 {sidebarCollapsed
+  id="app-sidebar"
+  class="flex shrink-0 flex-col gap-4 border-r border-leah-800 bg-leah-900 p-3 text-white shadow-none transition-[transform,width] duration-200 ease-out md:relative md:z-auto md:gap-5 md:py-4 md:shadow-none {mobileNavOpen
+    ? 'pointer-events-auto translate-x-0'
+    : 'pointer-events-none -translate-x-full'} fixed bottom-0 left-0 top-12 z-40 w-[min(18rem,88vw)] max-w-sm md:pointer-events-auto md:translate-x-0 {sidebarCollapsed
     ? 'md:w-14 md:overflow-hidden md:px-2'
     : 'md:w-56 md:px-3'}"
-  aria-label="Main menu"
+  aria-label="Menú principal"
+  inert={!isMd && !mobileNavOpen}
 >
   <button
     type="button"
@@ -21,32 +43,32 @@
       : ''}"
     onclick={() => onSelect('home')}
     aria-label="Apps · Dashboard"
-    title={sidebarCollapsed ? 'Apps · Dashboard' : undefined}
+    title={sidebarCollapsed && isMd ? 'Apps · Dashboard' : undefined}
   >
     <LayoutGrid class="h-5 w-5 shrink-0 text-sky-300" aria-hidden="true" />
-    {#if !sidebarCollapsed}
+    {#if showLabels}
       <span class="truncate">Apps</span>
     {/if}
   </button>
 
-  <nav class="grid grid-cols-2 gap-1 sm:grid-cols-4 md:grid-cols-1" aria-label="Modules">
+  <nav class="grid grid-cols-1 gap-1" aria-label="Módulos">
     {#each menu as item}
       {@const Icon = item.icon}
       <button
         type="button"
-        title={sidebarCollapsed ? item.label : undefined}
+        title={sidebarCollapsed && isMd ? item.label : undefined}
         class="flex items-center gap-2 rounded-lg py-2.5 text-left text-sm font-medium text-sky-100/90 transition hover:bg-leah-800 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30 md:px-3 {active === item.id
           ? 'bg-leah-800 text-white shadow-inner'
-          : ''} {sidebarCollapsed ? 'justify-center md:px-0' : 'justify-between'}"
+          : ''} {sidebarCollapsed && isMd ? 'justify-center md:px-0' : 'justify-between'}"
         onclick={() => onSelect(item.id)}
       >
         <span class="flex min-w-0 items-center gap-2">
           <Icon class="h-4 w-4 shrink-0 opacity-95" strokeWidth={2} aria-hidden="true" />
-          {#if !sidebarCollapsed}
+          {#if showLabels}
             <span class="truncate">{item.label}</span>
           {/if}
         </span>
-        {#if !sidebarCollapsed}
+        {#if showLabels}
           <kbd
             class="hidden shrink-0 rounded border border-white/20 bg-white/10 px-1.5 py-0.5 font-mono text-[10px] text-sky-100 md:inline-block"
           >
@@ -60,27 +82,27 @@
   <div class="mt-auto flex flex-col gap-1 border-t border-white/10 pt-3 md:border-0 md:pt-0">
     <button
       type="button"
-      class="flex items-center gap-2 rounded-lg py-2 text-sm text-sky-100/80 hover:bg-leah-800 hover:text-white {sidebarCollapsed
+      class="flex items-center gap-2 rounded-lg py-2 text-sm text-sky-100/80 hover:bg-leah-800 hover:text-white {sidebarCollapsed && isMd
         ? 'justify-center md:px-0'
         : 'px-3'}"
       onclick={() => onSelect('account')}
-      title={sidebarCollapsed ? 'Account' : undefined}
+      title={sidebarCollapsed && isMd ? 'Account' : undefined}
     >
       <UserCircle class="h-4 w-4 shrink-0" aria-hidden="true" />
-      {#if !sidebarCollapsed}
+      {#if showLabels}
         <span>Account</span>
       {/if}
     </button>
     <button
       type="button"
-      class="flex items-center gap-2 rounded-lg py-2 text-sm text-sky-100/80 hover:bg-leah-800 hover:text-white {sidebarCollapsed
+      class="flex items-center gap-2 rounded-lg py-2 text-sm text-sky-100/80 hover:bg-leah-800 hover:text-white {sidebarCollapsed && isMd
         ? 'justify-center md:px-0'
         : 'px-3'}"
       onclick={() => onSelect('settings')}
-      title={sidebarCollapsed ? 'Settings' : undefined}
+      title={sidebarCollapsed && isMd ? 'Settings' : undefined}
     >
       <Settings class="h-4 w-4 shrink-0" aria-hidden="true" />
-      {#if !sidebarCollapsed}
+      {#if showLabels}
         <span>Settings</span>
       {/if}
     </button>
@@ -91,8 +113,8 @@
         ? 'justify-center px-0'
         : 'px-3'}"
       onclick={() => (sidebarCollapsed = !sidebarCollapsed)}
-      aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-      title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+      aria-label={sidebarCollapsed ? 'Expandir barra lateral' : 'Contraer barra lateral'}
+      title={sidebarCollapsed ? 'Expandir barra lateral' : 'Contraer barra lateral'}
     >
       {#if sidebarCollapsed}
         <ChevronRight class="h-4 w-4 shrink-0" aria-hidden="true" />

@@ -3,7 +3,7 @@
 </script>
 
 <section
-  class="flex min-h-[420px] flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-zinc-300 bg-white p-10 text-center shadow-sm"
+  class="flex min-h-[min(420px,70dvh)] flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-zinc-300 bg-white p-6 text-center shadow-sm sm:min-h-[420px] sm:p-10"
 >
   <h2 class="text-2xl font-bold text-zinc-900">{title}</h2>
   <p class="max-w-md text-sm leading-relaxed text-zinc-500">

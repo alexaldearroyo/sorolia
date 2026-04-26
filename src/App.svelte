@@ -29,6 +29,7 @@
   let password = $state('demo');
   let invoiceView = $state('list');
   let sidebarCollapsed = $state(loadSidebarCollapsed());
+  let mobileNavOpen = $state(false);
 
   let cashBars = $derived(period === 'Monthly' ? cashMonthly : cashWeekly);
 
@@ -65,7 +66,39 @@
 
   function selectPage(id) {
     active = id;
+    mobileNavOpen = false;
   }
+
+  $effect(() => {
+    if (typeof window === 'undefined') return;
+    const mq = window.matchMedia('(min-width: 768px)');
+    const sync = () => {
+      if (mq.matches) mobileNavOpen = false;
+    };
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  });
+
+  $effect(() => {
+    if (typeof document === 'undefined') return;
+    if (mobileNavOpen) {
+      const prev = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = prev;
+      };
+    }
+  });
+
+  $effect(() => {
+    if (!mobileNavOpen) return;
+    const onEsc = (e) => {
+      if (e.key === 'Escape') mobileNavOpen = false;
+    };
+    window.addEventListener('keydown', onEsc);
+    return () => window.removeEventListener('keydown', onEsc);
+  });
 
   $effect(() => {
     if (!loggedIn) return;
@@ -102,14 +135,25 @@
       {workspace}
       {pageTitle}
       {userName}
+      {mobileNavOpen}
+      onToggleMobileNav={() => (mobileNavOpen = !mobileNavOpen)}
       onAccount={() => selectPage('account')}
       onLogout={() => (loggedIn = false)}
     />
 
-    <div class="flex min-h-0 flex-1">
-      <AppSidebar {menu} {active} bind:sidebarCollapsed onSelect={selectPage} />
+    <div class="relative flex min-h-0 min-w-0 flex-1 flex-col md:flex-row">
+      {#if mobileNavOpen}
+        <button
+          type="button"
+          class="fixed inset-0 z-30 bg-zinc-900/50 backdrop-blur-[1px] md:hidden"
+          onclick={() => (mobileNavOpen = false)}
+          aria-label="Cerrar menú"
+        ></button>
+      {/if}
 
-      <main class="min-h-0 flex-1 overflow-y-auto p-4 md:p-6">
+      <AppSidebar {menu} {active} {mobileNavOpen} bind:sidebarCollapsed onSelect={selectPage} />
+
+      <main class="min-h-0 min-w-0 flex-1 overflow-y-auto p-3 sm:p-4 md:p-6">
         <WorkspaceChrome {userName} {pageTitle} onNewInvoice={() => (active = 'invoices')} />
 
         {#if active === 'home'}

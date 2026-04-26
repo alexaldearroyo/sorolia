@@ -2,7 +2,7 @@
   let { onBack } = $props();
 </script>
 
-<section class="max-w-2xl rounded-xl border border-zinc-200/80 bg-white p-8 shadow-sm">
+<section class="max-w-2xl rounded-xl border border-zinc-200/80 bg-white p-5 shadow-sm sm:p-8">
   <h2 class="text-xl font-bold text-zinc-900">Settings</h2>
   <p class="mt-2 text-sm text-zinc-500">Company, taxes, sequences — tree placeholder.</p>
   <ul class="mt-6 grid gap-2 text-sm text-zinc-700">

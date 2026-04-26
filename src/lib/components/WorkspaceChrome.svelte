@@ -29,7 +29,9 @@
   </div>
 </div>
 
-<p class="mb-6 rounded-lg border border-leah-700/20 bg-leah-900/5 px-4 py-3 text-sm text-zinc-700">
+<p
+  class="mb-6 hidden rounded-lg border border-leah-700/20 bg-leah-900/5 px-4 py-3 text-sm text-zinc-700 md:block"
+>
   <strong class="text-leah-900">Shortcuts:</strong> click outside any field, then
   <kbd class="rounded border border-zinc-300 bg-white px-1 font-mono text-xs">Alt</kbd>
   +
