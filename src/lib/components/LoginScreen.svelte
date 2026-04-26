@@ -12,6 +12,19 @@
 
   let nameError = $state('');
   let showHint = $state(false);
+  let nameInput = $state();
+
+  $effect(() => {
+    if (typeof window === 'undefined') return;
+    if (!nameInput) return;
+    queueMicrotask(() => {
+      try {
+        nameInput.focus({ preventScroll: true });
+      } catch {
+        nameInput.focus?.();
+      }
+    });
+  });
 
   function attemptLogin() {
     const trimmed = userName.trim();
@@ -162,6 +175,7 @@
             <label class="mt-6 grid gap-2 text-sm font-semibold text-zinc-700">
               Name
               <input
+                bind:this={nameInput}
                 bind:value={userName}
                 oninput={clearNameError}
                 onkeydown={onKeydown}

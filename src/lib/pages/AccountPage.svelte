@@ -1,5 +1,7 @@
 <script>
-  let { userName, stats, currency, expenseTotal, onBack } = $props();
+  import RotateCcw from 'lucide-svelte/icons/rotate-ccw';
+
+  let { userName, stats, currency, expenseTotal, onBack, onResetDemo } = $props();
 </script>
 
 <section
@@ -35,11 +37,28 @@
     {stats.expenses} expense lines
   </p>
 
-  <button
-    type="button"
-    class="mt-8 rounded-lg border border-zinc-200 px-4 py-2.5 text-sm font-semibold text-zinc-800 hover:bg-zinc-50"
-    onclick={onBack}
-  >
-    Back to dashboard
-  </button>
+  <div class="mt-8 flex flex-wrap items-center justify-center gap-2">
+    <button
+      type="button"
+      class="rounded-lg border border-zinc-200 px-4 py-2.5 text-sm font-semibold text-zinc-800 hover:bg-zinc-50"
+      onclick={onBack}
+    >
+      Back to dashboard
+    </button>
+    {#if onResetDemo}
+      <button
+        type="button"
+        class="inline-flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-900 hover:bg-amber-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
+        onclick={onResetDemo}
+      >
+        <RotateCcw class="h-4 w-4" aria-hidden="true" />
+        Reset demo data
+      </button>
+    {/if}
+  </div>
+  {#if onResetDemo}
+    <p class="mt-3 text-[11px] text-zinc-400">
+      Restores customers, invoices, expenses, inventory, projects and people from the seed dataset.
+    </p>
+  {/if}
 </section>

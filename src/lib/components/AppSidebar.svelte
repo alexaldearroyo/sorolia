@@ -11,6 +11,8 @@
     typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches
   );
 
+  let asideEl = $state();
+
   $effect(() => {
     if (typeof window === 'undefined') return;
     const mq = window.matchMedia('(min-width: 768px)');
@@ -22,11 +24,22 @@
     return () => mq.removeEventListener('change', update);
   });
 
+  $effect(() => {
+    if (!mobileNavOpen || isMd || !asideEl) return;
+    queueMicrotask(() => {
+      const target = /** @type {HTMLElement | null} */ (
+        asideEl?.querySelector('nav button, button')
+      );
+      target?.focus?.({ preventScroll: true });
+    });
+  });
+
   /** Mobile drawer always shows labels; desktop respects the collapsed flag. */
   let showLabels = $derived(!isMd || !sidebarCollapsed);
 </script>
 
 <aside
+  bind:this={asideEl}
   id="app-sidebar"
   class="flex shrink-0 flex-col gap-4 border-r border-leah-800 bg-leah-900 p-3 text-white shadow-none transition-[transform,width] duration-200 ease-out md:relative md:top-0 md:z-auto md:h-full md:min-h-0 md:max-w-none md:gap-5 md:self-stretch md:py-4 md:shadow-none {mobileNavOpen
     ? 'pointer-events-auto translate-x-0'
@@ -57,9 +70,10 @@
       <button
         type="button"
         title={sidebarCollapsed && isMd ? item.label : undefined}
+        aria-keyshortcuts={`Alt+${item.key}`}
         class="flex items-center gap-2 rounded-lg py-2.5 text-left text-sm font-medium text-sky-100/90 transition hover:bg-leah-800 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30 md:px-3 {active === item.id
           ? 'bg-leah-800 text-white shadow-inner'
-          : ''} {sidebarCollapsed && isMd ? 'justify-center md:px-0' : 'justify-between'}"
+          : ''} {sidebarCollapsed && isMd ? 'justify-center md:px-0' : 'justify-start'}"
         onclick={() => onSelect(item.id)}
       >
         <span class="flex min-w-0 items-center gap-2">
@@ -68,13 +82,6 @@
             <span class="truncate">{item.label}</span>
           {/if}
         </span>
-        {#if showLabels}
-          <kbd
-            class="hidden shrink-0 rounded border border-white/20 bg-white/10 px-1.5 py-0.5 font-mono text-[10px] text-sky-100 md:inline-block"
-          >
-            {item.key}
-          </kbd>
-        {/if}
       </button>
     {/each}
   </nav>

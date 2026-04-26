@@ -54,18 +54,23 @@
     <span class="truncate font-medium text-zinc-700">{pageTitle}</span>
   </nav>
 
-  <div class="relative mx-1 hidden max-w-md flex-1 md:block">
+  <div class="relative mx-1 hidden max-w-md flex-1 xl:block">
     <Search
       class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400"
       aria-hidden="true"
     />
     <input
       type="search"
-      placeholder="Search in workspace… (demo)"
+      placeholder="Search in workspace…"
       disabled
-      class="w-full cursor-not-allowed rounded-lg border border-zinc-200 bg-zinc-50 py-2 pl-9 pr-3 text-sm text-zinc-500"
-      aria-label="Search disabled in demo"
+      class="w-full cursor-not-allowed rounded-lg border border-zinc-200 bg-zinc-50 py-2 pl-9 pr-16 text-sm text-zinc-500"
+      aria-label="Workspace search · coming soon"
     />
+    <span
+      class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded-full border border-zinc-200 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-zinc-500"
+    >
+      Soon
+    </span>
   </div>
 
   <span

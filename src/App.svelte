@@ -20,6 +20,7 @@
   import { menu } from './lib/navigation.js';
   import { currency } from './lib/format.js';
   import { SIDEBAR_COLLAPSED_KEY, loadSidebarCollapsed } from './lib/sidebarStorage.js';
+  import { loadPref, savePref } from './lib/prefs.js';
   import {
     enrichInvoices,
     customerName,
@@ -49,12 +50,12 @@
 
   let loggedIn = $state(false);
   let active = $state('home');
-  let filter = $state('All');
-  let period = $state('Monthly');
-  let chartLayout = $state('stacked');
+  let filter = $state(loadPref('filter', 'All', ['All', 'Offer', 'Open', 'Paid', 'Overdue']));
+  let period = $state(loadPref('period', 'Monthly', ['Monthly', 'Weekly', 'Quarterly']));
+  let chartLayout = $state(loadPref('chartLayout', 'stacked', ['stacked', 'grouped']));
   let userName = $state('Mate');
   let password = $state('demo');
-  let invoiceView = $state('list');
+  let invoiceView = $state(loadPref('invoiceView', 'list', ['list', 'kanban']));
   let sidebarCollapsed = $state(loadSidebarCollapsed());
   let mobileNavOpen = $state(false);
 
@@ -154,6 +155,21 @@
       : projects
   );
 
+  let topOverdueCustomer = $derived.by(() => {
+    const overdue = invoices
+      .filter((i) => i.status === 'Overdue')
+      .sort((a, b) => b.amount - a.amount)[0];
+    return overdue ? customerName(customers, overdue.customerId) : '';
+  });
+
+  let cashTrendPct = $derived.by(() => {
+    if (cashBars.length < 2) return 0;
+    const last = cashBars.at(-1);
+    const prev = cashBars.at(-2);
+    if (!last || !prev || !prev.income) return 0;
+    return Math.round(((last.income - prev.income) / prev.income) * 1000) / 10;
+  });
+
   let invoiceDraftRow = $derived(
     invoiceEditor?.mode === 'edit'
       ? invoices.find((i) => i.id === invoiceEditor.id) ?? null
@@ -185,7 +201,9 @@
       case 'inventory':
         return `SKUs tied to supplier customers · ${inventory.length} lines`;
       case 'projects':
-        return `Budget vs customer revenue · ${projects.length} initiatives`;
+        return projectCustomerFilter
+          ? `Budget vs customer revenue · ${visibleProjects.length} of ${projects.length} initiatives`
+          : `Budget vs customer revenue · ${projects.length} initiatives`;
       case 'hr':
         return `People mapped to delivery projects · ${employees.length} profiles`;
       case 'account':
@@ -438,6 +456,32 @@
     selectPage('projects', { customerId: p?.customerId });
   }
 
+  function resetDemoData() {
+    requestConfirm({
+      title: 'Reset demo workspace?',
+      message:
+        'Customers, invoices, expenses, projects, inventory and people will be restored from the seed dataset. Your current edits will be discarded.',
+      confirmLabel: 'Reset workspace',
+      cancelLabel: 'Keep my changes',
+      tone: 'info',
+      onConfirm: () => {
+        customers = structuredClone(customersSeed);
+        invoices = structuredClone(invoicesSeed);
+        expenseItems = structuredClone(expenseItemsSeed);
+        inventory = structuredClone(inventorySeed);
+        projects = structuredClone(projectsSeed);
+        employees = structuredClone(employeesSeed);
+        invoiceEditor = null;
+        expenseEditor = null;
+        customerEditor = null;
+        invoiceCustomerFilter = null;
+        projectCustomerFilter = null;
+        inventoryHighlightSupplierId = null;
+        pendingExpenseEditId = null;
+      }
+    });
+  }
+
   $effect(() => {
     if (typeof window === 'undefined') return;
     const mq = window.matchMedia('(min-width: 768px)');
@@ -494,6 +538,11 @@
       /* private mode / quota */
     }
   });
+
+  $effect(() => savePref('period', period));
+  $effect(() => savePref('chartLayout', chartLayout));
+  $effect(() => savePref('invoiceView', invoiceView));
+  $effect(() => savePref('filter', filter));
 
   const VALID_PAGES = new Set([
     'home',
@@ -596,6 +645,10 @@
             {expenseTotal}
             {cashBars}
             invoiceRows={enrichedInvoices}
+            expensesCount={expenseItems.length}
+            employeesCount={employees.length}
+            {topOverdueCustomer}
+            {cashTrendPct}
             {currency}
             {inventoryLowCount}
             {atRiskCustomers}
@@ -692,6 +745,7 @@
             {currency}
             {expenseTotal}
             onBack={() => selectPage('home')}
+            onResetDemo={resetDemoData}
           />
         {:else if active === 'settings'}
           <SettingsPage stats={workspaceStats} onBack={() => selectPage('home')} />

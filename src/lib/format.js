@@ -17,6 +17,19 @@ export function statusBadgeClass(status) {
   }
 }
 
+/**
+ * Formats a Date (or `new Date()` if omitted) as `dd/mm/yyyy`. The seed dataset
+ * uses slashes, so all newly created rows funnel through this to stay visually
+ * consistent (instead of mixing `28.03.2026` from `toLocaleDateString('de-DE')`).
+ *
+ * @param {Date} [d]
+ */
+export function formatDe(d = new Date()) {
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  return `${dd}/${mm}/${d.getFullYear()}`;
+}
+
 /** Parses a German-style dd/mm/yyyy or dd.mm.yyyy date into a Date, or null. */
 function parseDeDate(de) {
   const m = /^(\d{1,2})[./](\d{1,2})[./](\d{4})$/.exec(String(de ?? '').trim());
@@ -57,4 +70,14 @@ export function dueTag(status, dueDe, now) {
     return { kind: 'due-soon', label: `due in ${days}d` };
   }
   return null;
+}
+
+/**
+ * Tailwind classes for the due-tag pill, matching the kind returned by `dueTag`.
+ * @param {'overdue' | 'due-soon'} kind
+ */
+export function dueTagClass(kind) {
+  if (kind === 'overdue') return 'border-rose-200 bg-rose-50 text-rose-900';
+  if (kind === 'due-soon') return 'border-amber-200 bg-amber-50 text-amber-900';
+  return 'border-zinc-200 bg-zinc-50 text-zinc-700';
 }

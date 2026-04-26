@@ -1,6 +1,8 @@
 <script>
   import X from 'lucide-svelte/icons/x';
   import Trash2 from 'lucide-svelte/icons/trash-2';
+  import { useEscape } from '../escape.js';
+  import { lockDialogFocus } from '../dialogFocus.js';
 
   let { editor, draftRow, onClose, onSave, onDelete } = $props();
 
@@ -41,13 +43,16 @@
     if (editor?.mode === 'edit' && !draftRow) onClose();
   });
 
+  let dialogEl = $state();
+
   $effect(() => {
     if (!editor) return;
-    const onKey = (e) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return useEscape(onClose);
+  });
+
+  $effect(() => {
+    if (!editor) return;
+    return lockDialogFocus(() => dialogEl);
   });
 
   function validate() {
@@ -97,6 +102,7 @@
       onclick={onClose}
     ></button>
     <div
+      bind:this={dialogEl}
       role="dialog"
       aria-modal="true"
       aria-labelledby="customer-form-title"

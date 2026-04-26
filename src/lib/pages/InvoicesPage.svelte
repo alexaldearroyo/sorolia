@@ -3,7 +3,7 @@
   import Pencil from 'lucide-svelte/icons/pencil';
   import Trash2 from 'lucide-svelte/icons/trash-2';
   import FileText from 'lucide-svelte/icons/file-text';
-  import { statusBadgeClass, dueTag } from '../format.js';
+  import { statusBadgeClass, dueTag, dueTagClass } from '../format.js';
   import InvoiceFormModal from '../components/InvoiceFormModal.svelte';
 
   let {
@@ -25,12 +25,6 @@
     onEditInvoice
   } = $props();
 
-  function dueTagClass(kind) {
-    if (kind === 'overdue') return 'border-rose-200 bg-rose-50 text-rose-900';
-    if (kind === 'due-soon') return 'border-amber-200 bg-amber-50 text-amber-900';
-    return 'border-zinc-200 bg-zinc-50 text-zinc-700';
-  }
-
   const now = new Date();
 </script>
 
@@ -46,9 +40,10 @@
 
 <section class="rounded-xl border border-zinc-200/80 bg-white p-5 shadow-sm">
   <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-    <div class="inline-flex rounded-lg border border-zinc-200 bg-zinc-50 p-0.5">
+    <div class="inline-flex rounded-lg border border-zinc-200 bg-zinc-50 p-0.5" role="group" aria-label="Invoice view">
       <button
         type="button"
+        aria-pressed={invoiceView === 'list'}
         class="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-semibold {invoiceView === 'list'
           ? 'bg-white text-leah-900 shadow-sm'
           : 'text-zinc-600 hover:text-zinc-900'}"
@@ -58,6 +53,7 @@
       </button>
       <button
         type="button"
+        aria-pressed={invoiceView === 'kanban'}
         class="rounded-md px-3 py-2 text-sm font-semibold {invoiceView === 'kanban'
           ? 'bg-white text-leah-900 shadow-sm'
           : 'text-zinc-600 hover:text-zinc-900'}"
@@ -67,10 +63,11 @@
       </button>
     </div>
 
-    <div class="flex flex-wrap gap-2" aria-label="Invoice filters">
+    <div class="flex flex-wrap gap-2" role="group" aria-label="Invoice status filter">
       {#each ['All', 'Offer', 'Open', 'Paid', 'Overdue'] as option}
         <button
           type="button"
+          aria-pressed={filter === option}
           class="rounded-full border px-3.5 py-1.5 text-sm font-semibold transition {filter === option
             ? 'border-leah-900 bg-leah-900 text-white'
             : 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300'}"

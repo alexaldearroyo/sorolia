@@ -5,6 +5,7 @@
   import Trash2 from 'lucide-svelte/icons/trash-2';
   import Receipt from 'lucide-svelte/icons/receipt';
   import { customerName } from '../workspaceActions.js';
+  import { formatDe } from '../format.js';
   import ExpenseFormModal from '../components/ExpenseFormModal.svelte';
 
   let {
@@ -74,7 +75,7 @@
       vendor: vendor.trim(),
       type,
       amount: Math.round(n),
-      date: new Date().toLocaleDateString('de-DE'),
+      date: formatDe(),
       supplierCustomerId: supplierId || null
     });
     vendor = '';

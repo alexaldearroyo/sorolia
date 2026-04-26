@@ -60,6 +60,19 @@
     return 'bg-leah-700';
   }
 
+  const longDate = new Intl.DateTimeFormat('en-GB', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  });
+
+  function cellAriaLabel(cell, count) {
+    const base = longDate.format(cell.date);
+    if (!count) return `${base} · no events`;
+    return `${base} · ${count} event${count === 1 ? '' : 's'}`;
+  }
+
   function openEvent(ev) {
     if (ev.kind === 'invoice-due' || ev.kind === 'invoice-created') onOpenInvoiceEdit(ev.refId);
     else if (ev.kind === 'expense') onOpenExpenseEdit(ev.refId);
@@ -102,12 +115,14 @@
           {@const dayEvents = eventsForDay(eventMap, cell.isoKey)}
           <button
             type="button"
+            aria-label={cellAriaLabel(cell, dayEvents.length)}
+            aria-pressed={selectedDay === cell.isoKey}
             class="min-h-[4.5rem] bg-white p-1.5 text-left transition hover:bg-zinc-50 sm:min-h-[5.25rem] {!cell.inMonth
               ? 'opacity-40'
               : ''} {selectedDay === cell.isoKey ? 'ring-2 ring-inset ring-leah-700' : ''}"
             onclick={() => (selectedDay = cell.isoKey)}
           >
-            <span class="text-xs font-semibold text-zinc-800">{cell.date.getDate()}</span>
+            <span class="text-xs font-semibold text-zinc-800" aria-hidden="true">{cell.date.getDate()}</span>
             <div class="mt-1 flex flex-wrap gap-0.5">
               {#each dayEvents.slice(0, 4) as ev}
                 <span class="h-1.5 w-1.5 shrink-0 rounded-full {dotClass(ev.kind)}" title={ev.title}></span>

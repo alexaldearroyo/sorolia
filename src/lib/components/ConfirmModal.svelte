@@ -1,6 +1,7 @@
 <script>
   import AlertTriangle from 'lucide-svelte/icons/alert-triangle';
   import X from 'lucide-svelte/icons/x';
+  import { lockDialogFocus } from '../dialogFocus.js';
 
   /**
    * @typedef {{
@@ -22,6 +23,8 @@
   const open = $derived(request !== null);
   const tone = $derived(request?.tone ?? 'danger');
 
+  let dialogEl = $state();
+
   $effect(() => {
     if (!request) return;
     const onKey = (e) => {
@@ -30,6 +33,11 @@
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
+  });
+
+  $effect(() => {
+    if (!request) return;
+    return lockDialogFocus(() => dialogEl);
   });
 
   function confirm() {
@@ -50,6 +58,7 @@
       onclick={onClose}
     ></button>
     <div
+      bind:this={dialogEl}
       role="alertdialog"
       aria-modal="true"
       aria-labelledby="confirm-modal-title"

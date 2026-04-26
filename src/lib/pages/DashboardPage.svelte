@@ -5,7 +5,7 @@
   import FolderKanban from 'lucide-svelte/icons/folder-kanban';
   import Briefcase from 'lucide-svelte/icons/briefcase';
   import CalendarDays from 'lucide-svelte/icons/calendar-days';
-  import { statusBadgeClass } from '../format.js';
+  import { statusBadgeClass, dueTag, dueTagClass } from '../format.js';
   import CashFlowChart from '../components/CashFlowChart.svelte';
 
   let {
@@ -18,12 +18,16 @@
     expenseTotal,
     cashBars,
     invoiceRows,
+    expensesCount,
+    employeesCount,
     currency,
     onViewInvoices,
     inventoryLowCount,
     atRiskCustomers,
     activeProjectsCount,
     upcomingFortnight,
+    topOverdueCustomer = '',
+    cashTrendPct = 0,
     onGoCustomers,
     onGoInventory,
     onGoProjects,
@@ -38,13 +42,29 @@
         ? 'April · weekly buckets'
         : 'Quarterly · 4 buckets'
   );
+
+  const now = new Date();
+
+  const cashTrendLabel = $derived.by(() => {
+    if (!Number.isFinite(cashTrendPct) || cashTrendPct === 0) return 'Flat vs prior period';
+    const sign = cashTrendPct > 0 ? '+' : '';
+    return `${sign}${cashTrendPct.toFixed(1)}% vs prior period`;
+  });
 </script>
 
 <section class="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Current status">
   <article class="rounded-xl border border-zinc-200/80 bg-white p-5 shadow-sm">
     <span class="text-sm font-medium text-zinc-500">Paid income (YTD)</span>
     <strong class="mt-2 block text-2xl font-bold tracking-tight text-zinc-900">{currency(totals.revenue)}</strong>
-    <small class="mt-1 block text-xs font-medium text-sky-700">+8,4% vs prior year</small>
+    <small
+      class="mt-1 block text-xs font-medium {cashTrendPct > 0
+        ? 'text-emerald-700'
+        : cashTrendPct < 0
+          ? 'text-rose-700'
+          : 'text-zinc-500'}"
+    >
+      {cashTrendLabel}
+    </small>
   </article>
   <article class="rounded-xl border border-zinc-200/80 bg-white p-5 shadow-sm">
     <span class="text-sm font-medium text-zinc-500">Outstanding AR</span>
@@ -54,12 +74,20 @@
   <article class="rounded-xl border border-zinc-200/80 bg-white p-5 shadow-sm">
     <span class="text-sm font-medium text-zinc-500">Overdue exposure</span>
     <strong class="mt-2 block text-2xl font-bold tracking-tight text-rose-700">{currency(totals.overdue)}</strong>
-    <small class="mt-1 block text-xs text-zinc-500">Dunning · Klärmann + others</small>
+    <small class="mt-1 block text-xs text-zinc-500">
+      {#if overdueCount === 0}
+        No invoice past due
+      {:else if topOverdueCustomer}
+        Dunning · {topOverdueCustomer}{overdueCount > 1 ? ` +${overdueCount - 1} more` : ''}
+      {:else}
+        {overdueCount} invoice{overdueCount === 1 ? '' : 's'} past due
+      {/if}
+    </small>
   </article>
   <article class="rounded-xl border border-zinc-200/80 bg-white p-5 shadow-sm">
     <span class="text-sm font-medium text-zinc-500">OpEx (Apr.)</span>
     <strong class="mt-2 block text-2xl font-bold tracking-tight text-zinc-900">{currency(expenseTotal)}</strong>
-    <small class="mt-1 block text-xs text-zinc-500">Posted · DATEV export ready</small>
+    <small class="mt-1 block text-xs text-zinc-500">{expensesCount} posting{expensesCount === 1 ? '' : 's'} · CSV export ready</small>
   </article>
 </section>
 
@@ -112,7 +140,8 @@
       <Briefcase class="h-4 w-4 text-leah-800" aria-hidden="true" />
       People
     </span>
-    <span class="text-xs text-zinc-500">Delivery roster linked to PM</span>
+    <span class="text-2xl font-extrabold text-zinc-900">{employeesCount}</span>
+    <span class="text-xs text-zinc-500">on the delivery roster</span>
   </button>
   <button
     type="button"
@@ -136,10 +165,11 @@
         <p class="text-sm text-zinc-500">{periodLabel} · navy line = net pulse (in − out)</p>
       </div>
       <div class="flex flex-wrap items-center gap-2">
-        <div class="inline-flex rounded-lg border border-zinc-200 bg-zinc-50 p-0.5">
+        <div class="inline-flex rounded-lg border border-zinc-200 bg-zinc-50 p-0.5" role="group" aria-label="Cash period">
           {#each ['Monthly', 'Weekly', 'Quarterly'] as opt}
             <button
               type="button"
+              aria-pressed={period === opt}
               class="rounded-md px-2.5 py-1.5 text-xs font-semibold sm:px-3 sm:text-sm {period === opt
                 ? 'bg-white text-leah-900 shadow-sm'
                 : 'text-zinc-600 hover:text-zinc-900'}"
@@ -149,9 +179,10 @@
             </button>
           {/each}
         </div>
-        <div class="inline-flex rounded-lg border border-zinc-200 bg-zinc-50 p-0.5">
+        <div class="inline-flex rounded-lg border border-zinc-200 bg-zinc-50 p-0.5" role="group" aria-label="Chart layout">
           <button
             type="button"
+            aria-pressed={chartLayout === 'stacked'}
             class="rounded-md px-2.5 py-1.5 text-xs font-semibold sm:px-3 sm:text-sm {chartLayout === 'stacked'
               ? 'bg-white text-leah-900 shadow-sm'
               : 'text-zinc-600 hover:text-zinc-900'}"
@@ -161,6 +192,7 @@
           </button>
           <button
             type="button"
+            aria-pressed={chartLayout === 'grouped'}
             class="rounded-md px-2.5 py-1.5 text-xs font-semibold sm:px-3 sm:text-sm {chartLayout === 'grouped'
               ? 'bg-white text-leah-900 shadow-sm'
               : 'text-zinc-600 hover:text-zinc-900'}"
@@ -200,19 +232,32 @@
     </div>
     <div class="mt-4 grid gap-2">
       {#each invoiceRows.slice(0, 5) as invoice}
+        {@const tag = dueTag(invoice.status, invoice.due, now)}
         <button
           type="button"
           class="grid w-full grid-cols-1 items-center gap-2 rounded-lg border border-zinc-100 bg-zinc-50/80 p-3 text-left transition hover:border-zinc-200 hover:bg-zinc-50 sm:grid-cols-[108px_1fr_auto]"
           onclick={onViewInvoices}
+          aria-label={`Open invoice ${invoice.id} for ${invoice.customer}`}
         >
           <span class="font-mono text-xs font-semibold text-zinc-500">{invoice.id}</span>
           <strong class="text-sm text-zinc-900">{invoice.customer}</strong>
-          <span
-            class="inline-flex w-fit items-center rounded-md px-2.5 py-1 text-xs font-bold ring-1 {statusBadgeClass(
-              invoice.status
-            )}"
-          >
-            {invoice.status}
+          <span class="flex w-fit flex-wrap items-center gap-1.5">
+            <span
+              class="inline-flex w-fit items-center rounded-md px-2.5 py-1 text-xs font-bold ring-1 {statusBadgeClass(
+                invoice.status
+              )}"
+            >
+              {invoice.status}
+            </span>
+            {#if tag}
+              <span
+                class="inline-flex w-fit items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold {dueTagClass(
+                  tag.kind
+                )}"
+              >
+                {tag.label}
+              </span>
+            {/if}
           </span>
         </button>
       {/each}

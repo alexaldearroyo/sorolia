@@ -45,8 +45,7 @@
         Clear the customer filter to see every initiative, or add a project from the Customers view in a future demo.
       </p>
     </div>
-  {/if}
-
+  {:else}
   <div class="{projectCustomerFilter ? 'mt-6' : ''} grid gap-4 md:grid-cols-2">
     {#each projects as p}
       {@const spent = paidByCustomerId(p.customerId) ?? 0}
@@ -106,4 +105,5 @@
       </article>
     {/each}
   </div>
+  {/if}
 </section>

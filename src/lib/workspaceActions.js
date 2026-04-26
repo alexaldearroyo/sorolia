@@ -1,3 +1,5 @@
+import { formatDe } from './format.js';
+
 function nextNumericId(prefix, rows, idField = 'id') {
   const re = new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}-(\\d+)$`);
   let max = 0;
@@ -70,7 +72,8 @@ export function buildExpensesCsvRows(expenseItems, customers) {
       ].join(',')
     );
   }
-  return lines.join('\n');
+  // BOM keeps Excel happy with non-ASCII vendor names (e.g. "Klärmann").
+  return '\uFEFF' + lines.join('\n');
 }
 
 /** dd.mm.yyyy or dd/mm/yyyy → yyyy-mm-dd for &lt;input type="date"&gt; */
@@ -87,7 +90,7 @@ export function isoDateToDe(iso) {
   const parts = iso.split('-').map((x) => Number.parseInt(x, 10));
   if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) return '';
   const [y, mo, d] = parts;
-  return new Date(y, mo - 1, d).toLocaleDateString('de-DE');
+  return formatDe(new Date(y, mo - 1, d));
 }
 
 export function buildNewInvoice(invoices, { customerId, amount, dueDe, status }) {
@@ -95,7 +98,7 @@ export function buildNewInvoice(invoices, { customerId, amount, dueDe, status })
   return {
     id,
     customerId,
-    created: new Date().toLocaleDateString('de-DE'),
+    created: formatDe(),
     due: dueDe,
     status: status || 'Open',
     amount: Math.max(0, Math.round(Number(amount) || 0))
@@ -127,7 +130,7 @@ export function createExpenseRow({ vendor, type, amount, date, supplierCustomerI
     vendor: vendor || 'New vendor',
     type: type || 'General',
     amount: Number(amount) || 0,
-    date: date || new Date().toLocaleDateString('de-DE'),
+    date: date || formatDe(),
     supplierCustomerId: supplierCustomerId || null
   };
 }
