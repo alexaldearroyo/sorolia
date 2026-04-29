@@ -9,8 +9,9 @@
    *   message: string,
    *   confirmLabel?: string,
    *   cancelLabel?: string,
-   *   tone?: 'danger' | 'info',
-   *   onConfirm: () => void
+   *   tone?: 'danger' | 'info' | 'warn',
+   *   prompt?: { label: string, placeholder?: string, defaultValue?: string, required?: boolean },
+   *   onConfirm: (promptValue?: string) => void
    * }} ConfirmRequest
    */
 
@@ -24,12 +25,24 @@
   const tone = $derived(request?.tone ?? 'danger');
 
   let dialogEl = $state();
+  let promptValue = $state('');
+  let promptError = $state('');
+
+  $effect(() => {
+    if (!request) {
+      promptValue = '';
+      promptError = '';
+      return;
+    }
+    promptValue = request.prompt?.defaultValue ?? '';
+    promptError = '';
+  });
 
   $effect(() => {
     if (!request) return;
     const onKey = (e) => {
       if (e.key === 'Escape') onClose();
-      if (e.key === 'Enter') confirm();
+      if (e.key === 'Enter' && !request?.prompt) confirm();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -41,7 +54,11 @@
   });
 
   function confirm() {
-    request?.onConfirm();
+    if (request?.prompt?.required && !promptValue.trim()) {
+      promptError = 'This field is required.';
+      return;
+    }
+    request?.onConfirm(promptValue.trim());
     onClose();
   }
 </script>
@@ -69,7 +86,9 @@
         <span
           class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full {tone === 'danger'
             ? 'bg-rose-100 text-rose-700'
-            : 'bg-sky-100 text-sky-700'}"
+            : tone === 'warn'
+              ? 'bg-amber-100 text-amber-800'
+              : 'bg-sky-100 text-sky-700'}"
           aria-hidden="true"
         >
           <AlertTriangle class="h-5 w-5" />
@@ -79,6 +98,19 @@
           <p id="confirm-modal-message" class="mt-1 text-sm leading-relaxed text-zinc-600">
             {request.message}
           </p>
+          {#if request.prompt}
+            <label class="mt-3 block text-sm font-semibold text-zinc-700">
+              {request.prompt.label}
+              <input
+                bind:value={promptValue}
+                placeholder={request.prompt.placeholder ?? ''}
+                class="mt-1 w-full rounded-lg border bg-white px-3 py-2 text-sm font-normal {promptError ? 'border-rose-500' : 'border-zinc-200'}"
+              />
+            </label>
+            {#if promptError}
+              <p class="mt-1 text-xs font-medium text-rose-700">{promptError}</p>
+            {/if}
+          {/if}
         </div>
         <button
           type="button"
@@ -103,7 +135,9 @@
           class="rounded-lg px-4 py-2 text-sm font-semibold text-white shadow-sm focus:outline-none focus-visible:ring-2 {tone ===
           'danger'
             ? 'bg-rose-700 hover:bg-rose-800 focus-visible:ring-rose-400'
-            : 'bg-leah-900 hover:bg-leah-950 focus-visible:ring-leah-700/50'}"
+            : tone === 'warn'
+              ? 'bg-amber-600 hover:bg-amber-700 focus-visible:ring-amber-300'
+              : 'bg-leah-900 hover:bg-leah-950 focus-visible:ring-leah-700/50'}"
           onclick={confirm}
         >
           {request.confirmLabel ?? 'Confirm'}

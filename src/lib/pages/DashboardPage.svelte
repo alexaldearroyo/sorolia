@@ -22,6 +22,7 @@
     employeesCount,
     currency,
     onViewInvoices,
+    onOpenInvoice,
     inventoryLowCount,
     atRiskCustomers,
     activeProjectsCount,
@@ -32,7 +33,8 @@
     onGoInventory,
     onGoProjects,
     onGoHR,
-    onGoCalendar
+    onGoCalendar,
+    showHR = true
   } = $props();
 
   const periodLabel = $derived(
@@ -52,140 +54,145 @@
   });
 </script>
 
-<section class="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Current status">
-  <article class="rounded-xl border border-zinc-200/80 bg-white p-5 shadow-sm">
-    <span class="text-sm font-medium text-zinc-500">Paid income (YTD)</span>
-    <strong class="mt-2 block text-2xl font-bold tracking-tight text-zinc-900">{currency(totals.revenue)}</strong>
-    <small
-      class="mt-1 block text-xs font-medium {cashTrendPct > 0
-        ? 'text-emerald-700'
+<section class="mb-4 grid gap-4 lg:grid-cols-3" aria-label="Headline KPIs">
+  <article class="rounded-xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+    <p class="text-[11px] font-bold uppercase tracking-wide text-zinc-500 dark:text-slate-400">Paid income · YTD</p>
+    <strong class="mt-1 block text-3xl font-extrabold tracking-tight text-zinc-900 dark:text-slate-100">{currency(totals.revenue)}</strong>
+    <p
+      class="mt-1 text-xs font-medium {cashTrendPct > 0
+        ? 'text-emerald-700 dark:text-emerald-300'
         : cashTrendPct < 0
-          ? 'text-rose-700'
-          : 'text-zinc-500'}"
+          ? 'text-rose-700 dark:text-rose-300'
+          : 'text-zinc-500 dark:text-slate-400'}"
     >
       {cashTrendLabel}
-    </small>
+    </p>
   </article>
-  <article class="rounded-xl border border-zinc-200/80 bg-white p-5 shadow-sm">
-    <span class="text-sm font-medium text-zinc-500">Outstanding AR</span>
-    <strong class="mt-2 block text-2xl font-bold tracking-tight text-zinc-900">{currency(totals.pending)}</strong>
-    <small class="mt-1 block text-xs text-zinc-500">{openCount} open · {overdueCount} overdue</small>
+
+  <article class="rounded-xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+    <p class="text-[11px] font-bold uppercase tracking-wide text-zinc-500 dark:text-slate-400">Outstanding AR</p>
+    <strong class="mt-1 block text-3xl font-extrabold tracking-tight text-zinc-900 dark:text-slate-100">{currency(totals.pending)}</strong>
+    <div class="mt-2 grid grid-cols-2 gap-2 text-xs">
+      <div class="rounded-md bg-zinc-50 px-2 py-1.5 dark:bg-slate-800/60">
+        <p class="font-semibold text-zinc-700 dark:text-slate-300">{openCount} open</p>
+        <p class="text-[10px] text-zinc-500 dark:text-slate-400">awaiting payment</p>
+      </div>
+      <div class="rounded-md bg-rose-50 px-2 py-1.5 dark:bg-rose-900/20">
+        <p class="font-semibold text-rose-800 dark:text-rose-200 tabular-nums">{currency(totals.overdue)}</p>
+        <p class="text-[10px] text-rose-700/80 dark:text-rose-300/80 truncate">
+          {#if overdueCount === 0}
+            no overdue
+          {:else if topOverdueCustomer}
+            {overdueCount} overdue · {topOverdueCustomer}
+          {:else}
+            {overdueCount} overdue
+          {/if}
+        </p>
+      </div>
+    </div>
   </article>
-  <article class="rounded-xl border border-zinc-200/80 bg-white p-5 shadow-sm">
-    <span class="text-sm font-medium text-zinc-500">Overdue exposure</span>
-    <strong class="mt-2 block text-2xl font-bold tracking-tight text-rose-700">{currency(totals.overdue)}</strong>
-    <small class="mt-1 block text-xs text-zinc-500">
-      {#if overdueCount === 0}
-        No invoice past due
-      {:else if topOverdueCustomer}
-        Dunning · {topOverdueCustomer}{overdueCount > 1 ? ` +${overdueCount - 1} more` : ''}
-      {:else}
-        {overdueCount} invoice{overdueCount === 1 ? '' : 's'} past due
-      {/if}
-    </small>
-  </article>
-  <article class="rounded-xl border border-zinc-200/80 bg-white p-5 shadow-sm">
-    <span class="text-sm font-medium text-zinc-500">OpEx (Apr.)</span>
-    <strong class="mt-2 block text-2xl font-bold tracking-tight text-zinc-900">{currency(expenseTotal)}</strong>
-    <small class="mt-1 block text-xs text-zinc-500">{expensesCount} posting{expensesCount === 1 ? '' : 's'} · CSV export ready</small>
+
+  <article class="rounded-xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+    <p class="text-[11px] font-bold uppercase tracking-wide text-zinc-500 dark:text-slate-400">OpEx · this period</p>
+    <strong class="mt-1 block text-3xl font-extrabold tracking-tight text-zinc-900 dark:text-slate-100">{currency(expenseTotal)}</strong>
+    <p class="mt-1 text-xs text-zinc-500 dark:text-slate-400">{expensesCount} posting{expensesCount === 1 ? '' : 's'} · CSV export ready</p>
   </article>
 </section>
 
 <section
-  class="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
+  class="mb-6 rounded-xl border border-zinc-200/80 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900"
   aria-label="Cross-module signals"
 >
-  <button
-    type="button"
-    class="flex flex-col gap-1 rounded-xl border border-zinc-200 bg-white p-4 text-left shadow-sm transition hover:border-leah-300 hover:bg-zinc-50"
-    onclick={onGoCustomers}
-  >
-    <span class="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-zinc-500">
-      <Users class="h-4 w-4 text-leah-800" aria-hidden="true" />
-      Customers
-    </span>
-    <span class="text-2xl font-extrabold text-zinc-900">{atRiskCustomers}</span>
-    <span class="text-xs text-zinc-500">accounts flagged at risk</span>
-  </button>
-  <button
-    type="button"
-    class="flex flex-col gap-1 rounded-xl border border-zinc-200 bg-white p-4 text-left shadow-sm transition hover:border-leah-300 hover:bg-zinc-50"
-    onclick={onGoInventory}
-  >
-    <span class="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-zinc-500">
-      <Package class="h-4 w-4 text-leah-800" aria-hidden="true" />
-      Inventory
-    </span>
-    <span class="text-2xl font-extrabold text-amber-700">{inventoryLowCount}</span>
-    <span class="text-xs text-zinc-500">SKUs at or below reorder</span>
-  </button>
-  <button
-    type="button"
-    class="flex flex-col gap-1 rounded-xl border border-zinc-200 bg-white p-4 text-left shadow-sm transition hover:border-leah-300 hover:bg-zinc-50"
-    onclick={onGoProjects}
-  >
-    <span class="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-zinc-500">
-      <FolderKanban class="h-4 w-4 text-leah-800" aria-hidden="true" />
-      Projects
-    </span>
-    <span class="text-2xl font-extrabold text-zinc-900">{activeProjectsCount}</span>
-    <span class="text-xs text-zinc-500">active or planning</span>
-  </button>
-  <button
-    type="button"
-    class="flex flex-col gap-1 rounded-xl border border-zinc-200 bg-white p-4 text-left shadow-sm transition hover:border-leah-300 hover:bg-zinc-50"
-    onclick={onGoHR}
-  >
-    <span class="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-zinc-500">
-      <Briefcase class="h-4 w-4 text-leah-800" aria-hidden="true" />
-      People
-    </span>
-    <span class="text-2xl font-extrabold text-zinc-900">{employeesCount}</span>
-    <span class="text-xs text-zinc-500">on the delivery roster</span>
-  </button>
-  <button
-    type="button"
-    class="flex flex-col gap-1 rounded-xl border border-sky-200 bg-gradient-to-br from-sky-50 to-white p-4 text-left shadow-sm transition hover:border-sky-300"
-    onclick={onGoCalendar}
-  >
-    <span class="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-zinc-500">
-      <CalendarDays class="h-4 w-4 text-leah-800" aria-hidden="true" />
-      Calendar
-    </span>
-    <span class="text-2xl font-extrabold text-leah-900">{upcomingFortnight}</span>
-    <span class="text-xs text-zinc-500">items in the next 14 days</span>
-  </button>
+  <div class="grid grid-cols-2 divide-x divide-zinc-100 sm:grid-cols-4 dark:divide-slate-800 {showHR ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}">
+    <button
+      type="button"
+      class="flex items-center gap-3 px-3 py-2 text-left transition hover:bg-zinc-50 dark:hover:bg-slate-800/60"
+      onclick={onGoCustomers}
+    >
+      <Users class="h-4 w-4 shrink-0 text-leah-800 dark:text-leah-700" aria-hidden="true" />
+      <div class="min-w-0">
+        <p class="text-[10px] font-bold uppercase tracking-wide text-zinc-500 dark:text-slate-400">At-risk</p>
+        <p class="text-base font-extrabold text-zinc-900 dark:text-slate-100">{atRiskCustomers}<span class="ml-1 text-[10px] font-semibold text-zinc-500 dark:text-slate-400">customers</span></p>
+      </div>
+    </button>
+    <button
+      type="button"
+      class="flex items-center gap-3 px-3 py-2 text-left transition hover:bg-zinc-50 dark:hover:bg-slate-800/60"
+      onclick={onGoInventory}
+    >
+      <Package class="h-4 w-4 shrink-0 text-leah-800 dark:text-leah-700" aria-hidden="true" />
+      <div class="min-w-0">
+        <p class="text-[10px] font-bold uppercase tracking-wide text-zinc-500 dark:text-slate-400">Low stock</p>
+        <p class="text-base font-extrabold {inventoryLowCount > 0 ? 'text-amber-700 dark:text-amber-300' : 'text-zinc-900 dark:text-slate-100'}">{inventoryLowCount}<span class="ml-1 text-[10px] font-semibold text-zinc-500 dark:text-slate-400">SKUs</span></p>
+      </div>
+    </button>
+    <button
+      type="button"
+      class="flex items-center gap-3 px-3 py-2 text-left transition hover:bg-zinc-50 dark:hover:bg-slate-800/60"
+      onclick={onGoProjects}
+    >
+      <FolderKanban class="h-4 w-4 shrink-0 text-leah-800 dark:text-leah-700" aria-hidden="true" />
+      <div class="min-w-0">
+        <p class="text-[10px] font-bold uppercase tracking-wide text-zinc-500 dark:text-slate-400">Projects</p>
+        <p class="text-base font-extrabold text-zinc-900 dark:text-slate-100">{activeProjectsCount}<span class="ml-1 text-[10px] font-semibold text-zinc-500 dark:text-slate-400">active</span></p>
+      </div>
+    </button>
+    {#if showHR}
+      <button
+        type="button"
+        class="flex items-center gap-3 px-3 py-2 text-left transition hover:bg-zinc-50 dark:hover:bg-slate-800/60"
+        onclick={onGoHR}
+      >
+        <Briefcase class="h-4 w-4 shrink-0 text-leah-800 dark:text-leah-700" aria-hidden="true" />
+        <div class="min-w-0">
+          <p class="text-[10px] font-bold uppercase tracking-wide text-zinc-500 dark:text-slate-400">People</p>
+          <p class="text-base font-extrabold text-zinc-900 dark:text-slate-100">{employeesCount}<span class="ml-1 text-[10px] font-semibold text-zinc-500 dark:text-slate-400">profiles</span></p>
+        </div>
+      </button>
+    {/if}
+    <button
+      type="button"
+      class="flex items-center gap-3 px-3 py-2 text-left transition hover:bg-zinc-50 dark:hover:bg-slate-800/60"
+      onclick={onGoCalendar}
+    >
+      <CalendarDays class="h-4 w-4 shrink-0 text-leah-800 dark:text-leah-700" aria-hidden="true" />
+      <div class="min-w-0">
+        <p class="text-[10px] font-bold uppercase tracking-wide text-zinc-500 dark:text-slate-400">Next 14d</p>
+        <p class="text-base font-extrabold text-zinc-900 dark:text-slate-100">{upcomingFortnight}<span class="ml-1 text-[10px] font-semibold text-zinc-500 dark:text-slate-400">events</span></p>
+      </div>
+    </button>
+  </div>
 </section>
 
 <section class="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.85fr)]">
-  <article class="rounded-xl border border-zinc-200/80 bg-white p-5 shadow-sm">
+  <article class="rounded-xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
     <div class="flex flex-wrap items-start justify-between gap-4">
       <div>
-        <h2 class="text-lg font-bold text-zinc-900">Cash movement</h2>
-        <p class="text-sm text-zinc-500">{periodLabel} · navy line = net pulse (in − out)</p>
+        <h2 class="text-lg font-bold text-zinc-900 dark:text-slate-100">Cash movement</h2>
+        <p class="text-sm text-zinc-500 dark:text-slate-400">{periodLabel} · navy line = net pulse (in − out)</p>
       </div>
       <div class="flex flex-wrap items-center gap-2">
-        <div class="inline-flex rounded-lg border border-zinc-200 bg-zinc-50 p-0.5" role="group" aria-label="Cash period">
+        <div class="inline-flex rounded-lg border border-zinc-200 bg-zinc-50 p-0.5 dark:border-slate-700 dark:bg-slate-800" role="group" aria-label="Cash period">
           {#each ['Monthly', 'Weekly', 'Quarterly'] as opt}
             <button
               type="button"
               aria-pressed={period === opt}
               class="rounded-md px-2.5 py-1.5 text-xs font-semibold sm:px-3 sm:text-sm {period === opt
-                ? 'bg-white text-leah-900 shadow-sm'
-                : 'text-zinc-600 hover:text-zinc-900'}"
+                ? 'bg-white text-leah-900 shadow-sm dark:bg-slate-900 dark:text-slate-100'
+                : 'text-zinc-600 hover:text-zinc-900 dark:text-slate-300 dark:hover:text-slate-100'}"
               onclick={() => (period = opt)}
             >
               {opt}
             </button>
           {/each}
         </div>
-        <div class="inline-flex rounded-lg border border-zinc-200 bg-zinc-50 p-0.5" role="group" aria-label="Chart layout">
+        <div class="inline-flex rounded-lg border border-zinc-200 bg-zinc-50 p-0.5 dark:border-slate-700 dark:bg-slate-800" role="group" aria-label="Chart layout">
           <button
             type="button"
             aria-pressed={chartLayout === 'stacked'}
             class="rounded-md px-2.5 py-1.5 text-xs font-semibold sm:px-3 sm:text-sm {chartLayout === 'stacked'
-              ? 'bg-white text-leah-900 shadow-sm'
-              : 'text-zinc-600 hover:text-zinc-900'}"
+              ? 'bg-white text-leah-900 shadow-sm dark:bg-slate-900 dark:text-slate-100'
+              : 'text-zinc-600 hover:text-zinc-900 dark:text-slate-300 dark:hover:text-slate-100'}"
             onclick={() => (chartLayout = 'stacked')}
           >
             Stacked
@@ -194,8 +201,8 @@
             type="button"
             aria-pressed={chartLayout === 'grouped'}
             class="rounded-md px-2.5 py-1.5 text-xs font-semibold sm:px-3 sm:text-sm {chartLayout === 'grouped'
-              ? 'bg-white text-leah-900 shadow-sm'
-              : 'text-zinc-600 hover:text-zinc-900'}"
+              ? 'bg-white text-leah-900 shadow-sm dark:bg-slate-900 dark:text-slate-100'
+              : 'text-zinc-600 hover:text-zinc-900 dark:text-slate-300 dark:hover:text-slate-100'}"
             onclick={() => (chartLayout = 'grouped')}
           >
             Grouped
@@ -207,7 +214,7 @@
     <div class="mt-4">
       <CashFlowChart bars={cashBars} layout={chartLayout} {periodLabel} />
     </div>
-    <div class="mt-4 flex flex-wrap gap-4 text-sm text-zinc-600">
+    <div class="mt-4 flex flex-wrap gap-4 text-sm text-zinc-600 dark:text-slate-300">
       <span class="inline-flex items-center gap-2"><i class="h-2.5 w-2.5 rounded-full bg-sky-500"></i> Inflows</span>
       <span class="inline-flex items-center gap-2"><i class="h-2.5 w-2.5 rounded-full bg-rose-500"></i> Outflows</span>
       <span class="inline-flex items-center gap-2"><i class="h-2.5 w-2.5 rounded-full bg-amber-400"></i> In transit</span>
@@ -215,15 +222,15 @@
     </div>
   </article>
 
-  <article class="rounded-xl border border-zinc-200/80 bg-white p-5 shadow-sm">
+  <article class="rounded-xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div>
-        <h2 class="text-lg font-bold text-zinc-900">Latest invoices</h2>
-        <p class="text-sm text-zinc-500">{paidCount} paid · {invoiceRows.length} in pipeline</p>
+        <h2 class="text-lg font-bold text-zinc-900 dark:text-slate-100">Latest invoices</h2>
+        <p class="text-sm text-zinc-500 dark:text-slate-400">{paidCount} paid · {invoiceRows.length} in pipeline</p>
       </div>
       <button
         type="button"
-        class="inline-flex items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm font-semibold text-leah-900 hover:bg-zinc-100"
+        class="inline-flex items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm font-semibold text-leah-900 hover:bg-zinc-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
         onclick={onViewInvoices}
       >
         <FileText class="h-4 w-4" aria-hidden="true" />
@@ -235,12 +242,12 @@
         {@const tag = dueTag(invoice.status, invoice.due, now)}
         <button
           type="button"
-          class="grid w-full grid-cols-1 items-center gap-2 rounded-lg border border-zinc-100 bg-zinc-50/80 p-3 text-left transition hover:border-zinc-200 hover:bg-zinc-50 sm:grid-cols-[108px_1fr_auto]"
-          onclick={onViewInvoices}
+          class="grid w-full grid-cols-1 items-center gap-2 rounded-lg border border-zinc-100 bg-zinc-50/80 p-3 text-left transition hover:border-leah-200 hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-leah-700/30 dark:border-slate-800 dark:bg-slate-800/40 dark:hover:bg-slate-800 sm:grid-cols-[108px_1fr_auto]"
+          onclick={() => (onOpenInvoice ? onOpenInvoice(invoice.id) : onViewInvoices?.())}
           aria-label={`Open invoice ${invoice.id} for ${invoice.customer}`}
         >
-          <span class="font-mono text-xs font-semibold text-zinc-500">{invoice.id}</span>
-          <strong class="text-sm text-zinc-900">{invoice.customer}</strong>
+          <span class="font-mono text-xs font-semibold text-zinc-500 dark:text-slate-400">{invoice.id}</span>
+          <strong class="truncate text-sm text-zinc-900 dark:text-slate-100">{invoice.customer}</strong>
           <span class="flex w-fit flex-wrap items-center gap-1.5">
             <span
               class="inline-flex w-fit items-center rounded-md px-2.5 py-1 text-xs font-bold ring-1 {statusBadgeClass(
@@ -261,6 +268,11 @@
           </span>
         </button>
       {/each}
+      {#if invoiceRows.length === 0}
+        <p class="rounded-lg border border-dashed border-zinc-200 bg-zinc-50/40 px-4 py-6 text-center text-xs text-zinc-500 dark:border-slate-700 dark:bg-slate-800/40 dark:text-slate-400">
+          No invoices yet — create one to populate this view.
+        </p>
+      {/if}
     </div>
   </article>
 </section>

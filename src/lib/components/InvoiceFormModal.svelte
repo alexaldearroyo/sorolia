@@ -1,21 +1,49 @@
 <script>
   import X from 'lucide-svelte/icons/x';
   import Trash2 from 'lucide-svelte/icons/trash-2';
-  import { deDateToIso, isoDateToDe } from '../workspaceActions.js';
+  import Plus from 'lucide-svelte/icons/plus';
+  import Eye from 'lucide-svelte/icons/eye';
+  import { deDateToIso, isoDateToDe, expectedDueFromTerms } from '../workspaceActions.js';
   import { useEscape } from '../escape.js';
   import { lockDialogFocus } from '../dialogFocus.js';
+  import { summarizeLines, emptyLineItem } from '../invoiceMath.js';
+  import { formatMoney } from '../fx.js';
 
-  let { editor, draftRow, customers, onClose, onCreate, onUpdate, onDelete } = $props();
+  let {
+    editor,
+    draftRow,
+    customers,
+    settings = null,
+    canDelete = true,
+    onClose,
+    onCreate,
+    onUpdate,
+    onDelete,
+    onPreview
+  } = $props();
 
   let customerId = $state('');
-  let amount = $state('');
   let dueIso = $state('');
   let status = $state('Open');
+  let notes = $state('');
+  let poRef = $state('');
+  let invoiceCurrency = $state('EUR');
+  let amountPaid = $state(0);
+  let items = $state([emptyLineItem()]);
 
-  let errors = $state({ customerId: '', amount: '', due: '', general: '' });
+  let errors = $state({ customerId: '', items: '', due: '', general: '' });
 
   function clearErrors() {
-    errors = { customerId: '', amount: '', due: '', general: '' };
+    errors = { customerId: '', items: '', due: '', general: '' };
+  }
+
+  function defaultVat() {
+    return Number(settings?.defaultVat ?? 19);
+  }
+
+  function defaultTermsDays(custId) {
+    const cust = customers.find((c) => c.id === custId);
+    return Number(cust?.paymentTermsDays ?? settings?.paymentTermsDays ?? 14);
   }
 
   function plusDaysIso(days) {
@@ -29,14 +57,29 @@
     if (!editor) return;
     if (editor.mode === 'create') {
       customerId = customers[0]?.id ?? '';
-      amount = '';
       status = 'Open';
-      dueIso = plusDaysIso(14);
+      dueIso = plusDaysIso(defaultTermsDays(customerId));
+      notes = '';
+      poRef = '';
+      amountPaid = 0;
+      const cust = customers.find((c) => c.id === customerId);
+      invoiceCurrency = cust?.currency ?? settings?.currency ?? 'EUR';
+      items = [{ ...emptyLineItem(), vatRate: defaultVat() }];
     } else if (draftRow) {
       customerId = draftRow.customerId;
-      amount = String(draftRow.amount);
       status = draftRow.status;
-      dueIso = deDateToIso(draftRow.due) || plusDaysIso(14);
+      dueIso = deDateToIso(draftRow.due) || plusDaysIso(defaultTermsDays(draftRow.customerId));
+      notes = draftRow.notes ?? '';
+      poRef = draftRow.poRef ?? '';
+      invoiceCurrency = draftRow.currency ?? 'EUR';
+      amountPaid = Number(draftRow.amountPaid ?? 0);
+      const seedItems = (draftRow.items ?? []).map((it) => ({
+        description: it.description ?? '',
+        qty: it.qty ?? 1,
+        unitPrice: it.unitPrice ?? 0,
+        vatRate: it.vatRate ?? defaultVat()
+      }));
+      items = seedItems.length ? seedItems : [{ ...emptyLineItem(), vatRate: defaultVat() }];
     }
   }
 
@@ -60,6 +103,31 @@
     return lockDialogFocus(() => dialogEl);
   });
 
+  const totals = $derived(summarizeLines(items));
+
+  function fmt(value) {
+    return formatMoney(value, invoiceCurrency, 'de-DE');
+  }
+
+  function addLine() {
+    items = [...items, { ...emptyLineItem(), vatRate: defaultVat() }];
+  }
+
+  function removeLine(idx) {
+    items = items.length > 1 ? items.filter((_, i) => i !== idx) : items;
+  }
+
+  function updateLine(idx, patch) {
+    items = items.map((it, i) => (i === idx ? { ...it, ...patch } : it));
+  }
+
+  function onCustomerChange() {
+    if (editor?.mode !== 'create') return;
+    const cust = customers.find((c) => c.id === customerId);
+    if (cust?.currency) invoiceCurrency = cust.currency;
+    dueIso = plusDaysIso(defaultTermsDays(customerId));
+  }
+
   function validate() {
     clearErrors();
     let ok = true;
@@ -67,27 +135,55 @@
       errors.customerId = 'Choose a valid customer.';
       ok = false;
     }
-    const n = Number(amount);
-    if (!String(amount).trim() || Number.isNaN(n) || n <= 0) {
-      errors.amount = 'Enter an amount greater than zero.';
-      ok = false;
-    }
     if (!dueIso) {
       errors.due = 'Pick a due date.';
+      ok = false;
+    }
+    const real = items.filter(
+      (it) => (it.description ?? '').toString().trim() && Number(it.qty) > 0 && Number(it.unitPrice) >= 0
+    );
+    if (real.length === 0) {
+      errors.items = 'Add at least one line with a description, quantity and price.';
       ok = false;
     }
     return ok;
   }
 
+  function buildPayload() {
+    const dueDe = isoDateToDe(dueIso);
+    return {
+      customerId,
+      status,
+      dueDe,
+      due: dueDe,
+      notes: notes.trim(),
+      poRef: poRef.trim(),
+      currency: invoiceCurrency,
+      amountPaid: status === 'Partially paid' ? Number(amountPaid) || 0 : status === 'Paid' ? totals.gross : 0,
+      items
+    };
+  }
+
   function submit() {
     if (!validate()) return;
-    const n = Math.round(Number(amount));
-    const dueDe = isoDateToDe(dueIso);
+    const payload = buildPayload();
     if (editor.mode === 'create') {
-      onCreate({ customerId, amount: n, dueDe, status });
+      onCreate(payload);
     } else if (draftRow) {
-      onUpdate(draftRow.id, { customerId, amount: n, due: dueDe, status });
+      onUpdate(draftRow.id, payload);
     }
+  }
+
+  function preview() {
+    if (!validate()) return;
+    const payload = buildPayload();
+    onPreview?.({
+      ...payload,
+      due: payload.dueDe,
+      created: draftRow?.created,
+      id: draftRow?.id,
+      dunning: draftRow?.dunning ?? []
+    });
   }
 
   function remove() {
@@ -98,6 +194,12 @@
   const open = $derived(editor !== null);
   const title = $derived(
     editor?.mode === 'create' ? 'New invoice' : draftRow ? `Edit ${draftRow.id}` : 'Edit invoice'
+  );
+
+  const vatOptions = $derived(settings?.vatRates?.length ? settings.vatRates : [0, 7, 19]);
+
+  const expectedDue = $derived(
+    customerId ? expectedDueFromTerms(customers.find((c) => c.id === customerId), settings) : ''
   );
 </script>
 
@@ -114,10 +216,15 @@
       role="dialog"
       aria-modal="true"
       aria-labelledby="invoice-form-title"
-      class="relative z-10 w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl"
+      class="relative z-10 flex max-h-[90vh] w-full max-w-2xl flex-col rounded-2xl border border-zinc-200 bg-white shadow-2xl"
     >
-      <div class="flex items-start justify-between gap-3">
-        <h2 id="invoice-form-title" class="text-lg font-bold text-zinc-900">{title}</h2>
+      <header class="flex items-start justify-between gap-3 border-b border-zinc-100 px-6 py-4">
+        <div>
+          <h2 id="invoice-form-title" class="text-lg font-bold text-zinc-900">{title}</h2>
+          <p class="mt-1 text-xs text-zinc-500">
+            {invoiceCurrency} · DD/MM/YYYY · default VAT {defaultVat()}% · totals computed from lines.
+          </p>
+        </div>
         <button
           type="button"
           class="rounded-lg p-2 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
@@ -126,76 +233,212 @@
         >
           <X class="h-5 w-5" aria-hidden="true" />
         </button>
-      </div>
-      <p class="mt-1 text-sm text-zinc-500">All amounts are EUR · dates stored as DD/MM/YYYY (German locale).</p>
-      {#if errors.general}
-        <p class="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-900">{errors.general}</p>
-      {/if}
+      </header>
 
-      <div class="mt-5 grid gap-4">
-        <label class="grid gap-1.5 text-sm font-semibold text-zinc-700">
-          Customer
-          <select
-            bind:value={customerId}
-            aria-invalid={errors.customerId ? 'true' : 'false'}
-            class="rounded-lg border bg-white px-3 py-2 text-sm {errors.customerId ? 'border-rose-500' : 'border-zinc-200'}"
-          >
-            {#each customers as c}
-              <option value={c.id}>{c.name}</option>
-            {/each}
-          </select>
-          {#if errors.customerId}
-            <span class="text-xs font-medium text-rose-700">{errors.customerId}</span>
-          {/if}
-        </label>
-        <label class="grid gap-1.5 text-sm font-semibold text-zinc-700">
-          Amount (EUR)
-          <input
-            bind:value={amount}
-            type="number"
-            min="1"
-            step="1"
-            aria-invalid={errors.amount ? 'true' : 'false'}
-            class="rounded-lg border bg-white px-3 py-2 text-sm tabular-nums {errors.amount
-              ? 'border-rose-500'
-              : 'border-zinc-200'}"
-            placeholder="0"
-          />
-          {#if errors.amount}
-            <span class="text-xs font-medium text-rose-700">{errors.amount}</span>
-          {/if}
-        </label>
-        <label class="grid gap-1.5 text-sm font-semibold text-zinc-700">
-          Due date
-          <input
-            bind:value={dueIso}
-            type="date"
-            aria-invalid={errors.due ? 'true' : 'false'}
-            class="rounded-lg border bg-white px-3 py-2 text-sm {errors.due ? 'border-rose-500' : 'border-zinc-200'}"
-          />
-          {#if errors.due}
-            <span class="text-xs font-medium text-rose-700">{errors.due}</span>
-          {/if}
-        </label>
-        <label class="grid gap-1.5 text-sm font-semibold text-zinc-700">
-          Status
-          <select bind:value={status} class="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm">
-            <option>Offer</option>
-            <option>Open</option>
-            <option>Paid</option>
-            <option>Overdue</option>
-          </select>
-        </label>
-        {#if editor?.mode === 'edit' && draftRow}
-          <p class="text-xs text-zinc-500">
-            Created <span class="font-mono font-medium text-zinc-700">{draftRow.created}</span> · ID fixed for audit
-            trail
-          </p>
+      <div class="flex-1 overflow-y-auto px-6 py-5">
+        {#if errors.general}
+          <p class="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-900">{errors.general}</p>
         {/if}
+
+        <div class="grid gap-4 sm:grid-cols-2">
+          <label class="grid gap-1.5 text-sm font-semibold text-zinc-700">
+            Customer
+            <select
+              bind:value={customerId}
+              onchange={onCustomerChange}
+              aria-invalid={errors.customerId ? 'true' : 'false'}
+              class="rounded-lg border bg-white px-3 py-2 text-sm {errors.customerId ? 'border-rose-500' : 'border-zinc-200'}"
+            >
+              {#each customers as c}
+                <option value={c.id}>{c.name}</option>
+              {/each}
+            </select>
+            {#if errors.customerId}
+              <span class="text-xs font-medium text-rose-700">{errors.customerId}</span>
+            {/if}
+          </label>
+          <label class="grid gap-1.5 text-sm font-semibold text-zinc-700">
+            Status
+            <select bind:value={status} class="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm">
+              <option>Offer</option>
+              <option>Open</option>
+              <option>Partially paid</option>
+              <option>Paid</option>
+              <option>Overdue</option>
+            </select>
+          </label>
+          <label class="grid gap-1.5 text-sm font-semibold text-zinc-700">
+            Due date
+            <input
+              bind:value={dueIso}
+              type="date"
+              aria-invalid={errors.due ? 'true' : 'false'}
+              class="rounded-lg border bg-white px-3 py-2 text-sm {errors.due ? 'border-rose-500' : 'border-zinc-200'}"
+            />
+            {#if expectedDue && editor?.mode === 'create'}
+              <span class="text-[11px] text-zinc-500">Customer terms suggest <button type="button" class="underline underline-offset-2 hover:text-leah-800" onclick={() => (dueIso = plusDaysIso(defaultTermsDays(customerId)))}>{expectedDue}</button></span>
+            {/if}
+            {#if errors.due}
+              <span class="text-xs font-medium text-rose-700">{errors.due}</span>
+            {/if}
+          </label>
+          <label class="grid gap-1.5 text-sm font-semibold text-zinc-700">
+            Currency
+            <select bind:value={invoiceCurrency} class="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm">
+              <option value="EUR">EUR · €</option>
+              <option value="USD">USD · $</option>
+              <option value="GBP">GBP · £</option>
+              <option value="CHF">CHF</option>
+            </select>
+          </label>
+          <label class="grid gap-1.5 text-sm font-semibold text-zinc-700">
+            PO reference
+            <input
+              bind:value={poRef}
+              class="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm"
+              placeholder="PO-2026-…"
+            />
+          </label>
+          {#if status === 'Partially paid'}
+            <label class="grid gap-1.5 text-sm font-semibold text-zinc-700">
+              Paid so far
+              <input
+                type="number"
+                min="0"
+                step="1"
+                bind:value={amountPaid}
+                class="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm tabular-nums"
+              />
+            </label>
+          {/if}
+          {#if editor?.mode === 'edit' && draftRow}
+            <p class="self-end text-xs text-zinc-500">
+              Created <span class="font-mono font-medium text-zinc-700">{draftRow.created}</span> · ID locked for audit
+            </p>
+          {/if}
+        </div>
+
+        <fieldset class="mt-6 grid gap-2">
+          <legend class="text-xs font-bold uppercase tracking-wide text-zinc-500">Line items</legend>
+          {#if errors.items}
+            <p class="text-xs font-medium text-rose-700">{errors.items}</p>
+          {/if}
+
+          <div class="overflow-x-auto rounded-lg border border-zinc-200">
+            <table class="w-full min-w-[560px] text-left text-sm">
+              <thead>
+                <tr class="bg-zinc-50 text-[11px] font-bold uppercase tracking-wide text-zinc-500">
+                  <th class="px-3 py-2" scope="col">Description</th>
+                  <th class="px-3 py-2 text-right" scope="col">Qty</th>
+                  <th class="px-3 py-2 text-right" scope="col">Unit</th>
+                  <th class="px-3 py-2 text-right" scope="col">VAT %</th>
+                  <th class="px-3 py-2 text-right" scope="col">Net</th>
+                  <th class="px-3 py-2" scope="col"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {#each items as item, idx}
+                  <tr class="border-t border-zinc-100">
+                    <td class="px-3 py-2">
+                      <input
+                        value={item.description}
+                        oninput={(e) => updateLine(idx, { description: e.currentTarget.value })}
+                        placeholder="What you are billing"
+                        class="w-full rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-sm"
+                      />
+                    </td>
+                    <td class="px-3 py-2 text-right">
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={item.qty}
+                        oninput={(e) => updateLine(idx, { qty: e.currentTarget.value })}
+                        class="w-20 rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-right text-sm tabular-nums"
+                      />
+                    </td>
+                    <td class="px-3 py-2 text-right">
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={item.unitPrice}
+                        oninput={(e) => updateLine(idx, { unitPrice: e.currentTarget.value })}
+                        class="w-24 rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-right text-sm tabular-nums"
+                      />
+                    </td>
+                    <td class="px-3 py-2 text-right">
+                      <select
+                        value={item.vatRate}
+                        onchange={(e) => updateLine(idx, { vatRate: Number(e.currentTarget.value) })}
+                        class="rounded-md border border-zinc-200 bg-white px-1.5 py-1.5 text-sm tabular-nums"
+                      >
+                        {#each vatOptions as rate}
+                          <option value={rate}>{rate}</option>
+                        {/each}
+                      </select>
+                    </td>
+                    <td class="px-3 py-2 text-right tabular-nums text-zinc-800">
+                      {fmt((Number(item.qty) || 0) * (Number(item.unitPrice) || 0))}
+                    </td>
+                    <td class="px-3 py-2 text-right">
+                      <button
+                        type="button"
+                        class="rounded-md border border-zinc-200 p-1.5 text-zinc-500 hover:bg-zinc-50 disabled:opacity-30"
+                        onclick={() => removeLine(idx)}
+                        disabled={items.length <= 1}
+                        aria-label="Remove line"
+                        title="Remove line"
+                      >
+                        <Trash2 class="h-3.5 w-3.5" aria-hidden="true" />
+                      </button>
+                    </td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          </div>
+
+          <button
+            type="button"
+            class="inline-flex w-fit items-center gap-1.5 rounded-md border border-dashed border-zinc-300 px-3 py-1.5 text-xs font-semibold text-leah-900 hover:bg-zinc-50"
+            onclick={addLine}
+          >
+            <Plus class="h-3.5 w-3.5" aria-hidden="true" />
+            Add line
+          </button>
+        </fieldset>
+
+        <label class="mt-6 grid gap-1.5 text-sm font-semibold text-zinc-700">
+          Notes (visible on preview)
+          <textarea
+            bind:value={notes}
+            rows="2"
+            class="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm"
+            placeholder="Payment terms, PO reference, internal note…"
+          ></textarea>
+        </label>
+
+        <dl class="mt-5 grid gap-1.5 rounded-lg border border-zinc-200 bg-zinc-50/60 p-4 text-sm">
+          <div class="flex items-center justify-between">
+            <dt class="text-zinc-500">Net total</dt>
+            <dd class="font-semibold tabular-nums text-zinc-800">{fmt(totals.net)}</dd>
+          </div>
+          {#each totals.byVat as bucket}
+            <div class="flex items-center justify-between text-xs text-zinc-500">
+              <dt>VAT {bucket.rate}% on {fmt(bucket.net)}</dt>
+              <dd class="tabular-nums">{fmt(bucket.vat)}</dd>
+            </div>
+          {/each}
+          <div class="mt-1 flex items-center justify-between border-t border-zinc-200 pt-2 text-base">
+            <dt class="font-bold text-zinc-900">Gross total</dt>
+            <dd class="font-extrabold tabular-nums text-zinc-900">{fmt(totals.gross)}</dd>
+          </div>
+        </dl>
       </div>
 
-      <div class="mt-6 flex flex-wrap items-center justify-between gap-3">
-        {#if editor?.mode === 'edit'}
+      <footer class="flex flex-wrap items-center justify-between gap-3 border-t border-zinc-100 px-6 py-4">
+        {#if editor?.mode === 'edit' && canDelete}
           <button
             type="button"
             class="inline-flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-900 hover:bg-rose-100"
@@ -207,7 +450,17 @@
         {:else}
           <span></span>
         {/if}
-        <div class="flex gap-2">
+        <div class="flex flex-wrap gap-2">
+          {#if onPreview}
+            <button
+              type="button"
+              class="inline-flex items-center gap-2 rounded-lg border border-zinc-200 px-4 py-2 text-sm font-semibold text-leah-900 hover:bg-zinc-50"
+              onclick={preview}
+            >
+              <Eye class="h-4 w-4" aria-hidden="true" />
+              Preview
+            </button>
+          {/if}
           <button
             type="button"
             class="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-50"
@@ -223,7 +476,7 @@
             {editor?.mode === 'create' ? 'Create invoice' : 'Save changes'}
           </button>
         </div>
-      </div>
+      </footer>
     </div>
   </div>
 {/if}

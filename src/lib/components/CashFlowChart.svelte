@@ -102,7 +102,7 @@
           fill="#0ea5e9"
           opacity="0.92"
         >
-          <title>Inflows {b.income}</title>
+          <title>Inflows {b.raw?.income ? `· ${b.raw.income.toLocaleString('de-DE')} €` : `· ${b.income} %`}</title>
         </rect>
         <rect
           x={x0}
@@ -113,7 +113,7 @@
           fill="#f43f5e"
           opacity="0.9"
         >
-          <title>Outflows {b.expenses}</title>
+          <title>Outflows {b.raw?.expenses ? `· ${b.raw.expenses.toLocaleString('de-DE')} €` : `· ${b.expenses} %`}</title>
         </rect>
         <rect
           x={x0}
@@ -124,7 +124,7 @@
           fill="#fbbf24"
           opacity="0.95"
         >
-          <title>In transit {b.pending}</title>
+          <title>In transit {b.raw?.pending ? `· ${b.raw.pending.toLocaleString('de-DE')} €` : `· ${b.pending} %`}</title>
         </rect>
       {:else}
         {@const gap = 4}

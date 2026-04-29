@@ -9,9 +9,21 @@
   --color-leah-700: #224a8c;
 }
 
+/*
+ * Dark mode is opt-in via [data-theme="dark"] on the root element.
+ * We declare a custom variant so Tailwind v4 picks `dark:*` utilities
+ * up consistently with our manual toggle.
+ */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 @layer base {
   body {
     @apply m-0 min-h-screen min-w-[320px] font-sans text-zinc-900 antialiased;
+  }
+
+  html[data-theme='dark'] body {
+    @apply text-slate-100;
+    background: linear-gradient(180deg, #0b1226 0%, #050813 100%) fixed;
   }
 
   button:not(:disabled),
@@ -21,5 +33,77 @@
 
   a[href] {
     cursor: pointer;
+  }
+
+  :focus-visible {
+    outline: 2px solid #6366f1;
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+
+  button:disabled,
+  [role='button'][aria-disabled='true'] {
+    cursor: not-allowed;
+  }
+}
+
+/*
+ * Subtle page transition: applied to the main content wrapper in App.svelte.
+ * Uses `prefers-reduced-motion` to stay accessible for users who opt out.
+ */
+@keyframes emi-page-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.emi-page-fade {
+  animation: emi-page-fade-in 220ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .emi-page-fade {
+    animation: none;
+  }
+}
+
+/*
+ * Print stylesheet for the invoice preview modal. Hides the workspace chrome
+ * and exposes only the printable surface.
+ */
+@media print {
+  body {
+    background: #fff !important;
+  }
+
+  .print\:hidden,
+  [data-print-hide='true'] {
+    display: none !important;
+  }
+
+  [data-print-root='true'] {
+    position: static !important;
+    inset: auto !important;
+    background: #fff !important;
+  }
+
+  [data-print-root='true'] .emi-print-card {
+    box-shadow: none !important;
+    border: none !important;
+    max-width: none !important;
+    max-height: none !important;
+    width: 100% !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+  }
+
+  @page {
+    size: A4;
+    margin: 18mm 14mm;
   }
 }
