@@ -26,6 +26,7 @@ export const companySettingsSeed = {
   defaultVat: 19,
   vatRates: [0, 7, 19],
   paymentTermsDays: 14,
+  lowCapitalThreshold: 10000,
   invoicePrefix: 'INV-2026',
   invoiceNextNumber: 167,
   expensePrefix: 'EXP-2026',

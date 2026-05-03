@@ -45,7 +45,8 @@
     isInvoicePaid,
     isIssuedInvoice,
     cancelInvoiceWithCreditNote,
-    buildInventoryRow
+    buildInventoryRow,
+    issueOfferAsOpen
   } from './lib/workspaceActions.js';
   import { can, isPageVisible } from './lib/permissions.js';
   import { logAuditEvent, clearAuditLog, subscribeAuditLog } from './lib/auditLog.js';
@@ -109,7 +110,9 @@
   let invoiceDateRange = $state({ from: '', to: '' });
   let invoiceSelection = $state(/** @type {string[]} */ ([]));
   let customerDetailId = $state(/** @type {string | null} */ (null));
-  let projectInitialView = $state(/** @type {'projects'|'calendar'} */ ('projects'));
+  /** Bump to scroll the embedded delivery schedule into view on the Projects page. */
+  let projectsScheduleScrollNonce = $state(0);
+  let inventoryStockFilter = $state(/** @type {'all' | 'low' | 'out'} */ ('all'));
   /** @type {null | { mode: 'create' } | { mode: 'edit', id: string }} */
   let invoiceEditor = $state(null);
   /** @type {null | { mode: 'create' } | { mode: 'edit', id: string }} */
@@ -311,10 +314,13 @@
     )
   );
 
+  let openCount = $derived(invoices.filter((r) => r.status === 'Open').length);
+  let overdueCount = $derived(invoices.filter((r) => r.status === 'Overdue').length);
+  let paidCount = $derived(invoices.filter((r) => isInvoicePaid(r)).length);
+  let expenseTotal = $derived(expenseItems.reduce((sum, item) => sum + item.amount, 0));
+
   /* Working capital snapshot used by the header alert: paid revenue minus the
-     period's expenses. The threshold defaults to 10k € but can be tuned per
-     workspace via companySettings.lowCapitalThreshold so demos can simulate
-     tight cash runways. */
+     period's expenses. Threshold is configurable in Settings. */
   let capitalAvailable = $derived(totals.revenue - expenseTotal);
   let capitalThreshold = $derived(Number(companySettings.lowCapitalThreshold ?? 10000));
   let capitalAlert = $derived.by(() => {
@@ -330,11 +336,6 @@
           : `Low capital · ${currency(capitalAvailable)}`
     };
   });
-
-  let openCount = $derived(invoices.filter((r) => r.status === 'Open').length);
-  let overdueCount = $derived(invoices.filter((r) => r.status === 'Overdue').length);
-  let paidCount = $derived(invoices.filter((r) => isInvoicePaid(r)).length);
-  let expenseTotal = $derived(expenseItems.reduce((sum, item) => sum + item.amount, 0));
   let inventoryLowCount = $derived(inventory.filter((r) => r.qty <= r.reorder).length);
   let atRiskCustomers = $derived(customers.filter((c) => c.health === 'At risk').length);
   let activeProjectsCount = $derived(
@@ -388,7 +389,7 @@
     if (active === 'settings') return 'Settings';
     if (active === 'team') return 'Team';
     if (active === 'audit') return 'Audit log';
-    if (active === 'projects') return projectInitialView === 'calendar' ? 'Calendar' : 'Projects';
+    if (active === 'projects') return 'Projects';
     if (active === 'customer-detail')
       return customers.find((c) => c.id === customerDetailId)?.name ?? 'Customer';
     return menu.find((item) => item.id === active)?.label ?? active;
@@ -407,12 +408,9 @@
       case 'inventory':
         return `${inventory.length} SKUs · ${inventoryLowCount} below reorder`;
       case 'projects':
-        if (projectInitialView === 'calendar') {
-          return 'Invoice due dates · expense postings · project reviews';
-        }
         return projectCustomerFilter
-          ? `Budget vs customer revenue · ${visibleProjects.length} of ${projects.length} initiatives`
-          : `Budget vs customer revenue · ${projects.length} initiatives · use the tabs to flip to the calendar`;
+          ? `Budget vs customer revenue · ${visibleProjects.length} of ${projects.length} initiatives · delivery schedule below`
+          : `Budget vs customer revenue · ${projects.length} initiatives · calendar integrated below`;
       case 'hr':
         return `People mapped to delivery projects · ${employees.length} profiles`;
       case 'team':
@@ -493,16 +491,18 @@
 
     if (id === 'projects') {
       projectCustomerFilter = opts.customerId ?? null;
-      projectInitialView = opts.view === 'calendar' ? 'calendar' : 'projects';
+      if (opts.scrollTo === 'schedule') projectsScheduleScrollNonce += 1;
     } else {
       projectCustomerFilter = null;
     }
 
     if (id === 'inventory') {
       inventoryHighlightSupplierId = opts.supplierCustomerId ?? null;
+      inventoryStockFilter = opts.stockFilter === 'low' || opts.stockFilter === 'out' || opts.stockFilter === 'all' ? opts.stockFilter : 'all';
     } else {
       inventoryHighlightSupplierId = null;
       inventoryEditor = null;
+      inventoryStockFilter = 'all';
     }
 
     if (id === 'expenses') {
@@ -542,7 +542,19 @@
 
   function openCalendarProjectById(pid) {
     const p = projects.find((x) => x.id === pid);
-    selectPage('projects', { customerId: p?.customerId, view: 'calendar' });
+    selectPage('projects', { customerId: p?.customerId, scrollTo: 'schedule' });
+  }
+
+  function convertOfferToIssued(invoiceId) {
+    if (!can(role, 'invoices.write')) return;
+    const row = invoices.find((i) => i.id === invoiceId);
+    if (!row || row.status !== 'Offer') return;
+    const customer = customers.find((c) => c.id === row.customerId);
+    const next = issueOfferAsOpen(row, { customer, settings: companySettings });
+    invoices = invoices.map((i) => (i.id === invoiceId ? next : i));
+    audit('update', 'invoice', `${invoiceId} · issued from offer`, invoiceId);
+    pushToast({ kind: 'success', title: 'Offer issued', body: `${invoiceId} is now Open · due ${next.due}` });
+    invoicePreview = null;
   }
 
   function paidForCustomer(customerId) {
@@ -1039,6 +1051,8 @@
         inventoryHighlightSupplierId = null;
         pendingExpenseEditId = null;
         customerDetailId = null;
+        projectsScheduleScrollNonce = 0;
+        inventoryStockFilter = 'all';
         if (persistEnabled) clearWorkspaceState();
         audit('reset', 'workspace', 'Restored from seed dataset');
         pushToast({ kind: 'info', title: 'Workspace reset', body: 'Seed data restored.' });
@@ -1067,6 +1081,7 @@
       defaultVat: Number(draft.defaultVat) || 0,
       vatRates: companySettings.vatRates,
       paymentTermsDays: Number(draft.paymentTermsDays) || 0,
+      lowCapitalThreshold: Math.max(0, Number(draft.lowCapitalThreshold) || 10000),
       invoicePrefix: draft.invoicePrefix,
       invoiceNextNumber: Number(draft.invoiceNextNumber) || 1,
       expensePrefix: companySettings.expensePrefix,
@@ -1309,7 +1324,7 @@
 
   function navigateFromHash(page, sub) {
     if (page === 'calendar') {
-      selectPage('projects', { view: 'calendar' });
+      selectPage('projects', { scrollTo: 'schedule' });
       return;
     }
     if (page === 'customer-detail' && sub) {
@@ -1410,6 +1425,7 @@
       backTarget={backTarget}
       capitalAlert={capitalAlert}
       onCapitalAlertClick={() => selectPage('home')}
+      onCapitalRestock={() => selectPage('inventory', { stockFilter: 'low' })}
       onToggleMobileNav={() => (mobileNavOpen = !mobileNavOpen)}
       onAccount={() => selectPage('account')}
       onSettings={() => selectPage('settings')}
@@ -1484,7 +1500,8 @@
                 onGoProjects={() => selectPage('projects')}
                 onGoExpenses={() => selectPage('expenses')}
                 onGoHR={() => selectPage('hr')}
-                onGoCalendar={() => selectPage('projects', { view: 'calendar' })}
+                onGoCalendar={() => selectPage('projects', { scrollTo: 'schedule' })}
+                invoices={invoices}
               />
             {:else if active === 'invoices'}
               <InvoicesPage
@@ -1566,9 +1583,13 @@
                 onEdit={() => (customerEditor = { mode: 'edit', id: detailCustomer.id })}
                 onOpenInvoiceList={(cid) => selectPage('invoices', { customerId: cid })}
                 onOpenInvoice={(iid) => {
+                  const inv = invoices.find((i) => i.id === iid);
                   selectPage('invoices');
-                  if (can(role, 'invoices.write')) invoiceEditor = { mode: 'edit', id: iid };
-                  else openInvoicePreview(iid);
+                  if (inv?.status === 'Offer' && can(role, 'invoices.write')) {
+                    invoiceEditor = { mode: 'edit', id: iid };
+                  } else {
+                    openInvoicePreview(iid);
+                  }
                 }}
                 onOpenProjectList={(cid) => selectPage('projects', { customerId: cid })}
                 onOpenInventory={(cid) => selectPage('inventory', { supplierCustomerId: cid })}
@@ -1576,6 +1597,7 @@
             {:else if active === 'inventory'}
               <InventoryPage
                 bind:inventoryEditor
+                bind:stockFilter={inventoryStockFilter}
                 {inventory}
                 {customers}
                 highlightSupplierId={inventoryHighlightSupplierId}
@@ -1605,7 +1627,7 @@
                 onOpenInvoiceEdit={openCalendarInvoiceEdit}
                 onOpenExpenseEdit={openCalendarExpenseEdit}
                 onOpenProjectById={openCalendarProjectById}
-                initialView={projectInitialView}
+                scheduleScrollNonce={projectsScheduleScrollNonce}
               />
             {:else if active === 'hr' && can(role, 'hr.read')}
               <HRPage {employees} {projects} {customers} onOpenProject={openProjectFromHR} />
@@ -1670,9 +1692,13 @@
     onClose={() => (paletteOpen = false)}
     onPickCustomer={(cid) => openCustomerDetail(cid)}
     onPickInvoice={(iid) => {
+      const inv = invoices.find((i) => i.id === iid);
       selectPage('invoices');
-      if (can(role, 'invoices.write')) invoiceEditor = { mode: 'edit', id: iid };
-      else openInvoicePreview(iid);
+      if (inv?.status === 'Offer' && can(role, 'invoices.write')) {
+        invoiceEditor = { mode: 'edit', id: iid };
+      } else {
+        openInvoicePreview(iid);
+      }
     }}
     onPickInventorySupplier={(cid) => selectPage('inventory', { supplierCustomerId: cid })}
     onPickProject={(cid) => selectPage('projects', { customerId: cid })}
@@ -1687,6 +1713,7 @@
       selectPage('invoices');
       invoiceEditor = { mode: 'edit', id };
     }}
+    onConvertOffer={convertOfferToIssued}
     onClose={() => (invoicePreview = null)}
   />
   <ToastHost />

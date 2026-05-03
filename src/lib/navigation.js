@@ -12,6 +12,6 @@ export const menu = [
   { id: 'expenses', label: 'Expenses', key: 'E', icon: Receipt },
   { id: 'inventory', label: 'Inventory', key: 'N', icon: Package },
   { id: 'customers', label: 'Customers', key: 'C', icon: Users },
-  { id: 'projects', label: 'Projects · Calendar', key: 'P', icon: FolderKanban },
+  { id: 'projects', label: 'Projects', key: 'P', icon: FolderKanban },
   { id: 'hr', label: 'People', key: 'R', icon: Briefcase }
 ];

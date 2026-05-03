@@ -140,6 +140,17 @@
         />
       </label>
       <label class="grid gap-1.5 text-sm font-semibold text-zinc-700">
+        Low capital alert (€)
+        <input
+          bind:value={draft.lowCapitalThreshold}
+          type="number"
+          min="0"
+          step="100"
+          class="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm tabular-nums"
+        />
+        <span class="text-[11px] font-normal text-zinc-500">Top bar warns when available cash falls below this amount.</span>
+      </label>
+      <label class="grid gap-1.5 text-sm font-semibold text-zinc-700">
         Fiscal year start (MM-DD)
         <input bind:value={draft.fiscalYearStart} class="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm" />
       </label>

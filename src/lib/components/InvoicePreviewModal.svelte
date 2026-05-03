@@ -7,7 +7,7 @@
   import { summarizeLines, lineNetTotal } from '../invoiceMath.js';
   import { formatMoney, convert, currencyLabel } from '../fx.js';
 
-  let { invoice = null, customer = null, company = null, onClose, onEdit = null, canEdit = false } = $props();
+  let { invoice = null, customer = null, company = null, onClose, onEdit = null, onConvertOffer = null, canEdit = false } = $props();
 
   let dialogEl = $state();
 
@@ -99,6 +99,15 @@
           {isCreditNote ? 'Credit note preview' : isCancelled ? 'Cancelled invoice preview' : isOffer ? 'Offer preview' : 'Invoice preview'}
         </h2>
         <div class="flex items-center gap-1">
+          {#if isOffer && canEdit && onConvertOffer && invoice?.id}
+            <button
+              type="button"
+              class="inline-flex items-center gap-2 rounded-lg border border-emerald-700 bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700"
+              onclick={() => { onConvertOffer(invoice.id); }}
+            >
+              Issue invoice
+            </button>
+          {/if}
           {#if isOffer && canEdit && onEdit && invoice?.id}
             <button
               type="button"

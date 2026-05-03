@@ -42,7 +42,8 @@
     onGoCalendar,
     onOpenCustomer = () => {},
     onOpenExpense = () => {},
-    showHR = true
+    showHR = true,
+    invoices = []
   } = $props();
 
   let lowStockTop = $derived(
@@ -63,6 +64,56 @@
       })
       .slice(0, 5)
   );
+
+  /** @param {{ status: string, amountPaid?: number, amount?: number }} inv */
+  function paidRevenueForInvoice(inv) {
+    if (inv.status === 'Paid') return Number(inv.amountPaid ?? inv.amount ?? 0) || 0;
+    if (inv.status === 'Partially paid') return Number(inv.amountPaid ?? 0) || 0;
+    return 0;
+  }
+
+  let topCustomersByPaid = $derived.by(() => {
+    const map = new Map();
+    for (const inv of invoices) {
+      const add = paidRevenueForInvoice(inv);
+      if (add <= 0) continue;
+      const id = inv.customerId;
+      map.set(id, (map.get(id) ?? 0) + add);
+    }
+    return [...map.entries()]
+      .map(([customerId, total]) => ({
+        customerId,
+        total,
+        name: customers.find((c) => c.id === customerId)?.name ?? customerId
+      }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 4);
+  });
+
+  let expenseSpark30d = $derived.by(() => {
+    const end = new Date();
+    end.setHours(23, 59, 59, 999);
+    const start = new Date(end);
+    start.setDate(start.getDate() - 29);
+    start.setHours(0, 0, 0, 0);
+    const days = [];
+    for (let i = 0; i < 30; i++) {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      days.push(d.toLocaleDateString('en-CA'));
+    }
+    /** @type {Record<string, number>} */
+    const amounts = Object.fromEntries(days.map((k) => [k, 0]));
+    for (const e of expenses) {
+      const dt = parseDeDate(e.date);
+      if (!dt) continue;
+      const key = dt.toLocaleDateString('en-CA');
+      if (key in amounts) amounts[key] += Number(e.amount) || 0;
+    }
+    const total = Object.values(amounts).reduce((s, n) => s + n, 0);
+    const max = Math.max(1, ...Object.values(amounts));
+    return { total, max, bars: days.map((day) => ({ day, amt: amounts[day], pct: (amounts[day] / max) * 100 })) };
+  });
 
   const periodLabel = $derived(
     period === 'Monthly'
@@ -400,6 +451,27 @@
         </li>
       {/each}
     </ul>
+    <div class="mt-4 border-t border-zinc-100 pt-4 dark:border-slate-800">
+      <p class="text-[10px] font-bold uppercase tracking-wide text-zinc-500 dark:text-slate-400">Top by paid revenue</p>
+      <ul class="mt-2 grid gap-2">
+        {#each topCustomersByPaid as row}
+          <li>
+            <button
+              type="button"
+              class="flex w-full items-center justify-between gap-2 rounded-lg border border-zinc-100 bg-zinc-50/80 px-3 py-2 text-left transition hover:border-leah-200 hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-leah-700/30 dark:border-slate-800 dark:bg-slate-800/40 dark:hover:bg-slate-800"
+              onclick={() => onOpenCustomer(row.customerId)}
+            >
+              <span class="min-w-0 truncate text-sm font-semibold text-zinc-900 dark:text-slate-100">{row.name}</span>
+              <span class="shrink-0 text-sm font-extrabold tabular-nums text-emerald-700 dark:text-emerald-300">{currency(row.total)}</span>
+            </button>
+          </li>
+        {:else}
+          <li class="rounded-lg border border-dashed border-zinc-200 bg-zinc-50/40 px-3 py-3 text-center text-xs text-zinc-500 dark:border-slate-700 dark:bg-slate-800/40">
+            No paid invoice revenue to rank yet.
+          </li>
+        {/each}
+      </ul>
+    </div>
   </article>
 
   <article class="rounded-xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
@@ -410,7 +482,9 @@
           Recent expenses
         </h2>
         <p class="text-sm text-zinc-500 dark:text-slate-400">
-          {expensesCount} posting{expensesCount === 1 ? '' : 's'} · {currency(expenseTotal)} this period
+          {expensesCount} posting{expensesCount === 1 ? '' : 's'} · {currency(expenseTotal)} this period ·
+          <span class="font-semibold text-zinc-700 dark:text-slate-300">{currency(expenseSpark30d.total)}</span>
+          last 30 days
         </p>
       </div>
       <button
@@ -420,6 +494,21 @@
       >
         All
       </button>
+    </div>
+    <div
+      class="mt-3 flex h-16 gap-0.5 rounded-lg border border-zinc-100 bg-zinc-50/80 p-1 dark:border-slate-800 dark:bg-slate-800/40"
+      role="img"
+      aria-label="Expense amounts per day over the last 30 days"
+    >
+      {#each expenseSpark30d.bars as b}
+        <div class="flex min-w-0 flex-1 flex-col justify-end">
+          <div
+            class="min-h-[2px] w-full rounded-sm bg-rose-400 dark:bg-rose-500"
+            style="height: {Math.max(4, b.pct)}%"
+            title="{b.day}: {currency(b.amt)}"
+          ></div>
+        </div>
+      {/each}
     </div>
     <ul class="mt-3 grid gap-2">
       {#each recentExpenses as e}

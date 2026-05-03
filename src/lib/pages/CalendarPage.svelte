@@ -16,8 +16,20 @@
     projects,
     onOpenInvoiceEdit,
     onOpenExpenseEdit,
-    onOpenProjectById
+    onOpenProjectById,
+    embedded = false
   } = $props();
+
+  /** @type {'all' | 'invoice-due' | 'invoice-created' | 'expense' | 'project-review'} */
+  let eventKindFilter = $state('all');
+
+  const FILTER_OPTIONS = /** @type {const} */ ([
+    { id: 'all', label: 'All' },
+    { id: 'invoice-due', label: 'Dues' },
+    { id: 'invoice-created', label: 'Issued' },
+    { id: 'expense', label: 'Expenses' },
+    { id: 'project-review', label: 'Reviews' }
+  ]);
 
   let viewYear = $state(new Date().getFullYear());
   let viewMonth = $state(new Date().getMonth());
@@ -34,7 +46,11 @@
     viewMonth = d.getMonth();
   }
 
-  let eventsFlat = $derived(collectWorkspaceEvents(invoices, expenseItems, projects));
+  let eventsRaw = $derived(collectWorkspaceEvents(invoices, expenseItems, projects));
+  let eventsFlat = $derived.by(() => {
+    if (eventKindFilter === 'all') return eventsRaw;
+    return eventsRaw.filter((e) => e.kind === eventKindFilter);
+  });
   let eventMap = $derived(eventsByDay(eventsFlat));
 
   let grid = $derived(getCalendarGrid(viewYear, viewMonth));
@@ -44,6 +60,7 @@
   $effect(() => {
     viewYear;
     viewMonth;
+    eventKindFilter;
     selectedDay = null;
   });
 
@@ -78,32 +95,56 @@
     else if (ev.kind === 'expense') onOpenExpenseEdit(ev.refId);
     else if (ev.kind === 'project-review') onOpenProjectById(ev.refId);
   }
+
+  function dayEventsFiltered(isoKey) {
+    return eventsForDay(eventMap, isoKey);
+  }
 </script>
 
-<section class="rounded-xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-  <div class="flex items-center justify-end gap-2">
-    <button
-      type="button"
-      class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-200 bg-white hover:bg-zinc-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
-      onclick={prevMonth}
-      aria-label="Previous month"
-      title="Previous month"
-    >
-      <ChevronLeft class="h-4 w-4" aria-hidden="true" />
-    </button>
-    <span class="min-w-[10rem] text-center text-sm font-bold text-zinc-900 dark:text-slate-100">{monthTitle}</span>
-    <button
-      type="button"
-      class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-200 bg-white hover:bg-zinc-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
-      onclick={nextMonth}
-      aria-label="Next month"
-      title="Next month"
-    >
-      <ChevronRight class="h-4 w-4" aria-hidden="true" />
-    </button>
+<section
+  class="rounded-xl border border-zinc-200/80 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 {embedded
+    ? 'p-4 sm:p-5'
+    : 'p-5'}"
+>
+  <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+    <div class="flex flex-wrap items-center gap-1.5" role="group" aria-label="Event types shown on the calendar">
+      {#each FILTER_OPTIONS as opt}
+        <button
+          type="button"
+          aria-pressed={eventKindFilter === opt.id}
+          class="rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide {eventKindFilter === opt.id
+            ? 'border-leah-900 bg-leah-900 text-white'
+            : 'border-zinc-200 bg-zinc-50 text-zinc-600 hover:border-zinc-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300'}"
+          onclick={() => (eventKindFilter = opt.id)}
+        >
+          {opt.label}
+        </button>
+      {/each}
+    </div>
+    <div class="flex items-center justify-end gap-2 sm:justify-start">
+      <button
+        type="button"
+        class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-200 bg-white hover:bg-zinc-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+        onclick={prevMonth}
+        aria-label="Previous month"
+        title="Previous month"
+      >
+        <ChevronLeft class="h-4 w-4" aria-hidden="true" />
+      </button>
+      <span class="min-w-[10rem] text-center text-sm font-bold text-zinc-900 dark:text-slate-100">{monthTitle}</span>
+      <button
+        type="button"
+        class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-200 bg-white hover:bg-zinc-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+        onclick={nextMonth}
+        aria-label="Next month"
+        title="Next month"
+      >
+        <ChevronRight class="h-4 w-4" aria-hidden="true" />
+      </button>
+    </div>
   </div>
 
-  <div class="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
+  <div class="mt-4 grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
     <div class="overflow-x-auto">
       <div class="grid grid-cols-7 gap-px rounded-lg border border-zinc-200 bg-zinc-200 text-center text-[11px] font-bold uppercase tracking-wide text-zinc-500 dark:border-slate-700 dark:bg-slate-700 dark:text-slate-400">
         {#each ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as wd}
@@ -112,7 +153,7 @@
       </div>
       <div class="grid grid-cols-7 gap-px rounded-b-lg border border-t-0 border-zinc-200 bg-zinc-200 dark:border-slate-700 dark:bg-slate-700">
         {#each grid as cell}
-          {@const dayEvents = eventsForDay(eventMap, cell.isoKey)}
+          {@const dayEvents = dayEventsFiltered(cell.isoKey)}
           <button
             type="button"
             aria-label={cellAriaLabel(cell, dayEvents.length)}

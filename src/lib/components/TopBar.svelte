@@ -5,6 +5,7 @@
   import X from 'lucide-svelte/icons/x';
   import ArrowLeft from 'lucide-svelte/icons/arrow-left';
   import AlertTriangle from 'lucide-svelte/icons/alert-triangle';
+  import Package from 'lucide-svelte/icons/package';
   import UserMenu from './UserMenu.svelte';
   import NotificationsPanel from './NotificationsPanel.svelte';
   import { t } from '../i18n.js';
@@ -20,6 +21,7 @@
     backTarget = null,
     capitalAlert = null,
     onCapitalAlertClick = () => {},
+    onCapitalRestock = () => {},
     onToggleMobileNav,
     onAccount,
     onSettings,
@@ -99,28 +101,48 @@
   </button>
 
   {#if capitalAlert}
-    <button
-      type="button"
-      class="hidden items-center gap-1.5 rounded-full border-2 px-3 py-1 text-xs font-extrabold uppercase tracking-wide shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-300 sm:inline-flex {capitalAlert.severity === 'critical'
-        ? 'animate-pulse border-rose-700 bg-rose-600 text-white hover:bg-rose-700'
-        : 'border-amber-500 bg-amber-100 text-amber-900 hover:bg-amber-200 dark:border-amber-600 dark:bg-amber-900/60 dark:text-amber-100 dark:hover:bg-amber-900'}"
-      onclick={onCapitalAlertClick}
-      title="Working capital below threshold · click to open dashboard"
-    >
-      <AlertTriangle class="h-3.5 w-3.5" aria-hidden="true" />
-      <span>{capitalAlert.label}</span>
-    </button>
-    <button
-      type="button"
-      class="inline-flex h-9 w-9 items-center justify-center rounded-lg sm:hidden {capitalAlert.severity === 'critical'
-        ? 'animate-pulse bg-rose-600 text-white'
-        : 'bg-amber-200 text-amber-900'}"
-      onclick={onCapitalAlertClick}
-      aria-label={capitalAlert.label}
-      title={capitalAlert.label}
-    >
-      <AlertTriangle class="h-4 w-4" aria-hidden="true" />
-    </button>
+    <div class="flex shrink-0 items-center gap-1 sm:gap-1.5">
+      <button
+        type="button"
+        class="hidden items-center gap-1.5 rounded-full border-2 px-3 py-1 text-xs font-extrabold uppercase tracking-wide shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-300 sm:inline-flex {capitalAlert.severity === 'critical'
+          ? 'animate-pulse border-rose-700 bg-rose-600 text-white hover:bg-rose-700'
+          : 'border-amber-500 bg-amber-100 text-amber-900 hover:bg-amber-200 dark:border-amber-600 dark:bg-amber-900/60 dark:text-amber-100 dark:hover:bg-amber-900'}"
+        onclick={onCapitalAlertClick}
+        title="Working capital below threshold · click to open dashboard"
+      >
+        <AlertTriangle class="h-3.5 w-3.5" aria-hidden="true" />
+        <span>{capitalAlert.label}</span>
+      </button>
+      <button
+        type="button"
+        class="hidden items-center gap-1 rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-zinc-800 shadow-sm hover:bg-zinc-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-leah-700 sm:inline-flex dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
+        onclick={onCapitalRestock}
+        title="Open inventory filtered to low stock"
+      >
+        <Package class="h-3.5 w-3.5" aria-hidden="true" />
+        Restock
+      </button>
+      <button
+        type="button"
+        class="inline-flex h-9 w-9 items-center justify-center rounded-lg sm:hidden {capitalAlert.severity === 'critical'
+          ? 'animate-pulse bg-rose-600 text-white'
+          : 'bg-amber-200 text-amber-900'}"
+        onclick={onCapitalAlertClick}
+        aria-label={capitalAlert.label}
+        title={capitalAlert.label}
+      >
+        <AlertTriangle class="h-4 w-4" aria-hidden="true" />
+      </button>
+      <button
+        type="button"
+        class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-800 shadow-sm hover:bg-zinc-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-leah-700 sm:hidden dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
+        onclick={onCapitalRestock}
+        aria-label="Open low-stock inventory"
+        title="Low stock · open inventory"
+      >
+        <Package class="h-4 w-4" aria-hidden="true" />
+      </button>
+    </div>
   {/if}
 
   <span

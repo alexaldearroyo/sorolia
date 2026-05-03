@@ -286,6 +286,8 @@ export function applyInvoicePatch(existing, patch) {
     if (patch.status === 'Paid') {
       dunning.push({ kind: 'paid', at: today, note: 'Marked as paid' });
       next.amountPaid = next.amount;
+    } else if (patch.status === 'Open' && existing.status === 'Offer') {
+      dunning.push({ kind: 'issued', at: today, note: 'Offer converted to issued invoice' });
     } else if (patch.status === 'Partially paid') {
       const partial = Number(patch.amountPaid ?? existing.amountPaid ?? 0);
       dunning.push({
@@ -410,6 +412,16 @@ export function bumpInvoiceCounter(settings) {
 export function expectedDueFromTerms(customer, settings) {
   const days = Number(customer?.paymentTermsDays ?? settings?.paymentTermsDays ?? 14);
   return formatDePlusDays(days);
+}
+
+/**
+ * Promote an offer to an issued Open invoice: sets status Open, applies
+ * payment-terms-based due date, and appends a dunning entry.
+ */
+export function issueOfferAsOpen(existing, { customer, settings } = {}) {
+  const days = Number(customer?.paymentTermsDays ?? settings?.paymentTermsDays ?? 14);
+  const due = formatDePlusDays(days);
+  return applyInvoicePatch(existing, { status: 'Open', due });
 }
 
 export function isInvoicePaid(inv) {

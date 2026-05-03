@@ -14,6 +14,7 @@
 
   let {
     inventoryEditor = $bindable(null),
+    stockFilter = $bindable(/** @type {'all' | 'low' | 'out'} */ ('all')),
     inventory,
     customers,
     highlightSupplierId,
@@ -28,8 +29,6 @@
   } = $props();
 
   let query = $state('');
-  let stockFilter = $state(/** @type {'all' | 'low' | 'out'} */ ('all'));
-
   function stockState(row) {
     if (row.qty <= 0) return 'out';
     if (row.qty <= row.reorder) return 'low';
