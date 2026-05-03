@@ -80,7 +80,6 @@
   import InventoryPage from './lib/pages/InventoryPage.svelte';
   import ProjectsPage from './lib/pages/ProjectsPage.svelte';
   import HRPage from './lib/pages/HRPage.svelte';
-  import CalendarPage from './lib/pages/CalendarPage.svelte';
   import TeamPage from './lib/pages/TeamPage.svelte';
   import AuditLogPage from './lib/pages/AuditLogPage.svelte';
 
@@ -110,6 +109,7 @@
   let invoiceDateRange = $state({ from: '', to: '' });
   let invoiceSelection = $state(/** @type {string[]} */ ([]));
   let customerDetailId = $state(/** @type {string | null} */ (null));
+  let projectInitialView = $state(/** @type {'projects'|'calendar'} */ ('projects'));
   /** @type {null | { mode: 'create' } | { mode: 'edit', id: string }} */
   let invoiceEditor = $state(null);
   /** @type {null | { mode: 'create' } | { mode: 'edit', id: string }} */
@@ -311,6 +311,26 @@
     )
   );
 
+  /* Working capital snapshot used by the header alert: paid revenue minus the
+     period's expenses. The threshold defaults to 10k € but can be tuned per
+     workspace via companySettings.lowCapitalThreshold so demos can simulate
+     tight cash runways. */
+  let capitalAvailable = $derived(totals.revenue - expenseTotal);
+  let capitalThreshold = $derived(Number(companySettings.lowCapitalThreshold ?? 10000));
+  let capitalAlert = $derived.by(() => {
+    if (capitalAvailable >= capitalThreshold) return null;
+    const severity = capitalAvailable <= 0 ? 'critical' : 'warning';
+    return {
+      severity,
+      amount: capitalAvailable,
+      threshold: capitalThreshold,
+      label:
+        severity === 'critical'
+          ? `Capital depleted · ${currency(capitalAvailable)}`
+          : `Low capital · ${currency(capitalAvailable)}`
+    };
+  });
+
   let openCount = $derived(invoices.filter((r) => r.status === 'Open').length);
   let overdueCount = $derived(invoices.filter((r) => r.status === 'Overdue').length);
   let paidCount = $derived(invoices.filter((r) => isInvoicePaid(r)).length);
@@ -368,6 +388,7 @@
     if (active === 'settings') return 'Settings';
     if (active === 'team') return 'Team';
     if (active === 'audit') return 'Audit log';
+    if (active === 'projects') return projectInitialView === 'calendar' ? 'Calendar' : 'Projects';
     if (active === 'customer-detail')
       return customers.find((c) => c.id === customerDetailId)?.name ?? 'Customer';
     return menu.find((item) => item.id === active)?.label ?? active;
@@ -381,16 +402,17 @@
         return `${invoices.length} invoices in pipeline · ${openCount} open · ${overdueCount} overdue`;
       case 'expenses':
         return `${expenseItems.length} postings · ${currency(expenseTotal)} this period`;
-      case 'calendar':
-        return 'Invoice due dates · expense postings · project reviews';
       case 'customers':
         return `${customers.length} accounts · ${atRiskCustomers} flagged at risk`;
       case 'inventory':
         return `${inventory.length} SKUs · ${inventoryLowCount} below reorder`;
       case 'projects':
+        if (projectInitialView === 'calendar') {
+          return 'Invoice due dates · expense postings · project reviews';
+        }
         return projectCustomerFilter
           ? `Budget vs customer revenue · ${visibleProjects.length} of ${projects.length} initiatives`
-          : `Budget vs customer revenue · ${projects.length} initiatives`;
+          : `Budget vs customer revenue · ${projects.length} initiatives · use the tabs to flip to the calendar`;
       case 'hr':
         return `People mapped to delivery projects · ${employees.length} profiles`;
       case 'team':
@@ -412,11 +434,11 @@
     if (active === 'home' || active === 'invoices') {
       const allowed = can(role, 'invoices.write');
       return {
-        label: 'New invoice',
+        label: 'New offer',
         icon: Plus,
         onClick: handleNewInvoice,
         disabled: !allowed,
-        disabledHint: 'Your role cannot create invoices'
+        disabledHint: 'Your role cannot create offers'
       };
     }
     if (active === 'expenses') {
@@ -471,6 +493,7 @@
 
     if (id === 'projects') {
       projectCustomerFilter = opts.customerId ?? null;
+      projectInitialView = opts.view === 'calendar' ? 'calendar' : 'projects';
     } else {
       projectCustomerFilter = null;
     }
@@ -504,9 +527,13 @@
   }
 
   function openCalendarInvoiceEdit(id) {
+    const inv = invoices.find((i) => i.id === id);
     selectPage('invoices');
-    if (can(role, 'invoices.write')) invoiceEditor = { mode: 'edit', id };
-    else openInvoicePreview(id);
+    if (inv?.status === 'Offer' && can(role, 'invoices.write')) {
+      invoiceEditor = { mode: 'edit', id };
+    } else {
+      openInvoicePreview(id);
+    }
   }
 
   function openCalendarExpenseEdit(id) {
@@ -515,7 +542,7 @@
 
   function openCalendarProjectById(pid) {
     const p = projects.find((x) => x.id === pid);
-    selectPage('projects', { customerId: p?.customerId });
+    selectPage('projects', { customerId: p?.customerId, view: 'calendar' });
   }
 
   function paidForCustomer(customerId) {
@@ -565,20 +592,20 @@
       return;
     }
 
-    /* Drafts can be deleted outright. Anything that has been issued must be
+    /* Offers can be deleted outright. Anything that has been issued must be
        cancelled by emitting a credit note (Storno / Rechnungskorrektur) so
        the original document is preserved for tax and audit. */
     if (!isIssuedInvoice(row)) {
       if (!can(role, 'invoices.delete')) return;
       requestConfirm({
-        title: `Delete draft ${row.id}?`,
-        message: `${row.id} for ${customerName(customers, row.customerId)} hasn't been issued yet, so it can be removed without keeping a document trail.`,
-        confirmLabel: 'Delete draft',
+        title: `Delete offer ${row.id}?`,
+        message: `${row.id} for ${customerName(customers, row.customerId)} is still a proposal, so it can be removed without keeping a document trail.`,
+        confirmLabel: 'Delete offer',
         tone: 'danger',
         onConfirm: () => {
           invoices = invoices.filter((i) => i.id !== id);
-          audit('delete', 'invoice', `${row.id} · draft removed`, id);
-          pushToast({ kind: 'warn', title: 'Draft deleted', body: row.id });
+          audit('delete', 'invoice', `${row.id} · offer removed`, id);
+          pushToast({ kind: 'warn', title: 'Offer deleted', body: row.id });
           invoiceEditor = null;
         }
       });
@@ -629,6 +656,7 @@
     if (!inv) return;
     invoicePreview = {
       id: inv.id,
+      title: inv.title ?? '',
       created: inv.created,
       customerId: inv.customerId,
       due: inv.due,
@@ -1279,6 +1307,20 @@
     'customer-detail'
   ]);
 
+  function navigateFromHash(page, sub) {
+    if (page === 'calendar') {
+      selectPage('projects', { view: 'calendar' });
+      return;
+    }
+    if (page === 'customer-detail' && sub) {
+      selectPage('customer-detail', { customerId: sub });
+      return;
+    }
+    if (page !== active && isPageVisible(role, page)) {
+      selectPage(page);
+    }
+  }
+
   function readHashPage() {
     if (typeof window === 'undefined') return null;
     const raw = (window.location.hash || '').replace(/^#\/?/, '').trim();
@@ -1296,11 +1338,7 @@
     const fromHash = readHashPage();
     if (fromHash) {
       const [page, sub] = fromHash.split('/');
-      if (page === 'customer-detail' && sub) {
-        selectPage('customer-detail', { customerId: sub });
-      } else if (page !== active && isPageVisible(role, page)) {
-        selectPage(page);
-      }
+      navigateFromHash(page, sub);
     } else {
       window.history.replaceState(null, '', `#/${active}`);
     }
@@ -1313,11 +1351,7 @@
       const next = readHashPage();
       if (!next) return;
       const [page, sub] = next.split('/');
-      if (page === 'customer-detail' && sub) {
-        selectPage('customer-detail', { customerId: sub });
-      } else if (page !== active && isPageVisible(role, page)) {
-        selectPage(page);
-      }
+      navigateFromHash(page, sub);
     };
     window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);
@@ -1374,6 +1408,8 @@
       {notifications}
       {mobileNavOpen}
       backTarget={backTarget}
+      capitalAlert={capitalAlert}
+      onCapitalAlertClick={() => selectPage('home')}
       onToggleMobileNav={() => (mobileNavOpen = !mobileNavOpen)}
       onAccount={() => selectPage('account')}
       onSettings={() => selectPage('settings')}
@@ -1435,18 +1471,20 @@
                 {atRiskCustomers}
                 {activeProjectsCount}
                 {upcomingFortnight}
+                inventory={inventory}
+                customers={customers}
+                expenses={expenseItems}
                 showHR={can(role, 'hr.read')}
                 onViewInvoices={() => selectPage('invoices')}
-                onOpenInvoice={(id) => {
-                  selectPage('invoices');
-                  if (can(role, 'invoices.write')) invoiceEditor = { mode: 'edit', id };
-                  else openInvoicePreview(id);
-                }}
+                onOpenInvoice={openInvoicePreview}
+                onOpenCustomer={openCustomerDetail}
+                onOpenExpense={(id) => selectPage('expenses', { expenseEditId: id })}
                 onGoCustomers={() => selectPage('customers')}
                 onGoInventory={() => selectPage('inventory')}
                 onGoProjects={() => selectPage('projects')}
+                onGoExpenses={() => selectPage('expenses')}
                 onGoHR={() => selectPage('hr')}
-                onGoCalendar={() => selectPage('calendar')}
+                onGoCalendar={() => selectPage('projects', { view: 'calendar' })}
               />
             {:else if active === 'invoices'}
               <InvoicesPage
@@ -1495,15 +1533,6 @@
                 onDownloadCsv={downloadExpensesCsv}
                 pendingExpenseEditId={pendingExpenseEditId}
                 onConsumedExpenseDeepLink={consumeExpenseDeepLink}
-              />
-            {:else if active === 'calendar'}
-              <CalendarPage
-                {invoices}
-                {expenseItems}
-                {projects}
-                onOpenInvoiceEdit={openCalendarInvoiceEdit}
-                onOpenExpenseEdit={openCalendarExpenseEdit}
-                onOpenProjectById={openCalendarProjectById}
               />
             {:else if active === 'customers'}
               <CustomersPage
@@ -1571,6 +1600,12 @@
                 onClearProjectCustomerFilter={() => (projectCustomerFilter = null)}
                 onOpenCustomer={(cid) => openCustomerDetail(cid)}
                 onOpenInvoices={(cid) => selectPage('invoices', { customerId: cid })}
+                invoices={invoices}
+                expenseItems={expenseItems}
+                onOpenInvoiceEdit={openCalendarInvoiceEdit}
+                onOpenExpenseEdit={openCalendarExpenseEdit}
+                onOpenProjectById={openCalendarProjectById}
+                initialView={projectInitialView}
               />
             {:else if active === 'hr' && can(role, 'hr.read')}
               <HRPage {employees} {projects} {customers} onOpenProject={openProjectFromHR} />
@@ -1647,6 +1682,11 @@
     invoice={invoicePreview}
     customer={invoicePreview ? customers.find((c) => c.id === invoicePreview.customerId) : null}
     {company}
+    canEdit={can(role, 'invoices.write')}
+    onEdit={(id) => {
+      selectPage('invoices');
+      invoiceEditor = { mode: 'edit', id };
+    }}
     onClose={() => (invoicePreview = null)}
   />
   <ToastHost />

@@ -7,7 +7,7 @@
   import { summarizeLines, lineNetTotal } from '../invoiceMath.js';
   import { formatMoney, convert, currencyLabel } from '../fx.js';
 
-  let { invoice = null, customer = null, company = null, onClose } = $props();
+  let { invoice = null, customer = null, company = null, onClose, onEdit = null, canEdit = false } = $props();
 
   let dialogEl = $state();
 
@@ -73,8 +73,9 @@
 
   let isCreditNote = $derived(Boolean(invoice?.isCreditNote));
   let isCancelled = $derived(invoice?.status === 'Cancelled');
+  let isOffer = $derived(invoice?.status === 'Offer');
   let docTypeLabel = $derived(
-    isCreditNote ? 'Credit note · Storno' : isCancelled ? 'Cancelled invoice' : 'Invoice'
+    isCreditNote ? 'Credit note · Storno' : isCancelled ? 'Cancelled invoice' : isOffer ? 'Offer · proposal' : 'Invoice'
   );
 </script>
 
@@ -95,9 +96,18 @@
     >
       <header class="flex items-start justify-between gap-3 border-b border-zinc-100 px-6 py-4 print:hidden">
         <h2 id="invoice-preview-title" class="text-base font-bold text-zinc-900">
-          {isCreditNote ? 'Credit note preview' : isCancelled ? 'Cancelled invoice preview' : 'Invoice preview'}
+          {isCreditNote ? 'Credit note preview' : isCancelled ? 'Cancelled invoice preview' : isOffer ? 'Offer preview' : 'Invoice preview'}
         </h2>
         <div class="flex items-center gap-1">
+          {#if isOffer && canEdit && onEdit && invoice?.id}
+            <button
+              type="button"
+              class="inline-flex items-center gap-2 rounded-lg border border-leah-700 bg-leah-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-leah-800"
+              onclick={() => { onEdit(invoice.id); onClose?.(); }}
+            >
+              Edit offer
+            </button>
+          {/if}
           <button
             type="button"
             class="inline-flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-leah-900 hover:bg-zinc-50"
@@ -146,7 +156,10 @@
             <div>
               <p class="text-xs font-bold uppercase tracking-wide {isCreditNote ? 'text-violet-700' : 'text-leah-700'}">{docTypeLabel}{currencyLabel(code) !== '€' ? ` · ${code}` : ''}</p>
               <h3 class="mt-1 text-2xl font-extrabold tracking-tight text-zinc-900 {isCancelled && !isCreditNote ? 'line-through decoration-2' : ''}">{invoice.id ?? 'Draft'}</h3>
-              <p class="mt-1 text-xs text-zinc-500">Created {invoice.created ?? '—'} · Due {invoice.due ?? '—'}</p>
+              {#if invoice.title}
+                <p class="mt-1 text-sm font-semibold italic text-zinc-700">{invoice.title}</p>
+              {/if}
+              <p class="mt-1 text-xs text-zinc-500">Created {invoice.created ?? '—'}{isOffer ? '' : ` · Due ${invoice.due ?? '—'}`}</p>
               {#if invoice.poRef}
                 <p class="mt-1 text-xs text-zinc-500">PO {invoice.poRef}</p>
               {/if}

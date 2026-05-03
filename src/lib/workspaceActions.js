@@ -235,41 +235,51 @@ function normalizeItems(items = []) {
 /**
  * Build a new invoice. When the form omits a due date we fall back to the
  * customer's payment terms or the workspace default, so the configured terms
- * actually surface in the demo.
+ * actually surface in the demo. Offers do not carry a due date — they are
+ * proposals that have not yet entered the dunning timeline.
  */
 export function buildNewInvoice(invoices, payload, { settings, customer } = {}) {
   const items = normalizeItems(payload.items ?? []);
   const totals = summarizeLines(items);
   const id = settings ? nextInvoiceId(invoices, settings) : nextNumericId('INV-2026', invoices);
   const fallbackDays = Number(customer?.paymentTermsDays ?? settings?.paymentTermsDays ?? 14);
-  const due = payload.dueDe ?? payload.due ?? formatDePlusDays(fallbackDays);
+  const status = payload.status || 'Open';
+  const due = status === 'Offer' ? '' : (payload.dueDe ?? payload.due ?? formatDePlusDays(fallbackDays));
   const currency = payload.currency || customer?.currency || settings?.currency || 'EUR';
   const created = formatDe();
   return {
     id,
     customerId: payload.customerId,
+    title: String(payload.title ?? '').trim(),
     created,
     due,
-    status: payload.status || 'Open',
+    status,
     amount: totals.gross || Math.max(0, Math.round(Number(payload.amount) || 0)),
     amountPaid: 0,
     currency,
     poRef: String(payload.poRef ?? '').trim(),
     notes: String(payload.notes ?? '').trim(),
     items,
-    dunning: [{ kind: 'issued', at: created, note: 'Issued from workspace' }]
+    dunning: [{ kind: status === 'Offer' ? 'issued' : 'issued', at: created, note: status === 'Offer' ? 'Offer drafted' : 'Issued from workspace' }]
   };
 }
 
 export function applyInvoicePatch(existing, patch) {
   const items = patch.items ? normalizeItems(patch.items) : existing.items ?? [];
   const totals = summarizeLines(items);
+  const nextStatus = patch.status ?? existing.status;
   const next = {
     ...existing,
     ...patch,
+    title: patch.title != null ? String(patch.title).trim() : existing.title ?? '',
     items,
     amount: totals.gross || Math.max(0, Math.round(Number(patch.amount ?? existing.amount) || 0))
   };
+  if (nextStatus === 'Offer') {
+    next.due = '';
+  } else if (existing.status === 'Offer' && nextStatus !== 'Offer' && !patch.due && !patch.dueDe) {
+    next.due = formatDePlusDays(14);
+  }
   if (patch.status && patch.status !== existing.status) {
     const today = formatDe();
     const dunning = Array.isArray(existing.dunning) ? [...existing.dunning] : [];

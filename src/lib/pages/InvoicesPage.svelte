@@ -64,7 +64,7 @@
       return {
         kind: 'delete',
         label: 'Delete',
-        title: 'Delete draft (no document trail)',
+        title: 'Delete offer (no document trail yet)',
         icon: Trash2,
         toneClass: 'border-rose-200 bg-rose-50 text-rose-800 hover:bg-rose-100 dark:border-rose-700 dark:bg-rose-900/30 dark:text-rose-100'
       };
@@ -76,6 +76,12 @@
       icon: Ban,
       toneClass: 'border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-100'
     };
+  }
+
+  /* Issued invoices are immutable for tax / audit reasons. Offers (still in
+     proposal state) are the only documents that can be edited freely. */
+  function isEditable(invoice) {
+    return invoice.status === 'Offer';
   }
 
   function toggleSelection(id) {
@@ -322,15 +328,25 @@
         {@const tag = dueTag(invoice.status, invoice.due, now)}
         {@const meta = destructiveMeta(invoice)}
         {@const isLocked = invoice.isCreditNote || invoice.status === 'Cancelled'}
+        {@const editable = isEditable(invoice)}
         <li class="rounded-xl border bg-white p-4 shadow-sm dark:bg-slate-900 {isLocked ? 'border-zinc-200 opacity-75 dark:border-slate-800' : 'border-zinc-200 dark:border-slate-700'}">
+          <button
+            type="button"
+            class="block w-full text-left"
+            onclick={() => onOpenInvoicePreview?.(invoice.id)}
+            aria-label="Open {invoice.id}"
+          >
           <div class="flex items-start justify-between gap-2">
             <div class="flex items-start gap-2">
               {#if (canWrite || canDelete) && !isLocked}
-                <input type="checkbox" class="mt-1" checked={selection.includes(invoice.id)} onchange={() => toggleSelection(invoice.id)} aria-label="Select {invoice.id}" />
+                <input type="checkbox" class="mt-1" checked={selection.includes(invoice.id)} onchange={(e) => { e.stopPropagation(); toggleSelection(invoice.id); }} onclick={(e) => e.stopPropagation()} aria-label="Select {invoice.id}" />
               {/if}
               <div>
                 <span class="font-mono text-xs font-semibold text-zinc-500 dark:text-slate-400 {invoice.status === 'Cancelled' ? 'line-through' : ''}">{invoice.id}</span>
                 <p class="mt-0.5 text-sm font-bold text-zinc-900 dark:text-slate-100">{invoice.customer}</p>
+                {#if invoice.title}
+                  <p class="mt-0.5 text-xs italic text-zinc-600 dark:text-slate-300">{invoice.title}</p>
+                {/if}
                 {#if invoice.isCreditNote && invoice.referenceInvoiceId}
                   <p class="mt-0.5 text-[11px] font-medium text-violet-700 dark:text-violet-300">Credit note for {invoice.referenceInvoiceId}</p>
                 {:else if invoice.creditNoteId}
@@ -342,7 +358,7 @@
               {invoice.status}
             </span>
           </div>
-          <p class="mt-2 text-xs text-zinc-500 dark:text-slate-400">{invoice.created} → {invoice.due}{invoice.poRef ? ` · PO ${invoice.poRef}` : ''}</p>
+          <p class="mt-2 text-xs text-zinc-500 dark:text-slate-400">{invoice.created}{invoice.due ? ` → ${invoice.due}` : ''}{invoice.poRef ? ` · PO ${invoice.poRef}` : ''}</p>
           <div class="mt-1 flex items-center justify-between">
             <span class="text-base font-bold tabular-nums text-zinc-900 dark:text-slate-100 {invoice.isCreditNote ? 'text-violet-800 dark:text-violet-300' : ''}">
               {currency(invoice.amount)}{invoice.currency && invoice.currency !== 'EUR' ? ` ${currencyLabel(invoice.currency)}` : ''}
@@ -353,6 +369,7 @@
               </span>
             {/if}
           </div>
+          </button>
           <div class="mt-3 flex flex-wrap gap-1.5">
             {#if onOpenInvoicePreview}
               <button
@@ -360,10 +377,10 @@
                 class="inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs font-semibold text-leah-900 hover:bg-zinc-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
                 onclick={() => onOpenInvoicePreview(invoice.id)}
               >
-                <Eye class="h-3.5 w-3.5" aria-hidden="true" /> Preview
+                <Eye class="h-3.5 w-3.5" aria-hidden="true" /> Open
               </button>
             {/if}
-            {#if canWrite && !isLocked}
+            {#if canWrite && editable}
               <button
                 type="button"
                 class="inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs font-semibold text-leah-900 hover:bg-zinc-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
@@ -415,33 +432,38 @@
             {@const tag = dueTag(invoice.status, invoice.due, now)}
             {@const meta = destructiveMeta(invoice)}
             {@const isLocked = invoice.isCreditNote || invoice.status === 'Cancelled'}
-            <tr class="border-b border-zinc-100 last:border-0 hover:bg-zinc-50/80 dark:border-slate-800 dark:hover:bg-slate-800/60 {isLocked ? 'bg-zinc-50/50 dark:bg-slate-800/40' : ''}">
-              <td class="px-3 py-3">
+            {@const editable = isEditable(invoice)}
+            <tr
+              class="cursor-pointer border-b border-zinc-100 last:border-0 hover:bg-leah-50/40 focus-within:bg-zinc-50 dark:border-slate-800 dark:hover:bg-slate-800/60 {isLocked ? 'bg-zinc-50/50 dark:bg-slate-800/40' : ''}"
+              onclick={() => onOpenInvoicePreview?.(invoice.id)}
+              onkeydown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && e.currentTarget === e.target) { e.preventDefault(); onOpenInvoicePreview?.(invoice.id); } }}
+              tabindex="0"
+              role="button"
+              aria-label="Open {invoice.id}"
+            >
+              <td class="px-3 py-3" onclick={(e) => e.stopPropagation()}>
                 {#if (canWrite || canDelete) && !isLocked}
                   <input type="checkbox" checked={selection.includes(invoice.id)} onchange={() => toggleSelection(invoice.id)} aria-label="Select {invoice.id}" />
                 {/if}
               </td>
               <td class="px-4 py-3 font-mono font-semibold text-zinc-800 dark:text-slate-200">
-                {#if onOpenInvoicePreview}
-                  <button type="button" class="text-left hover:underline {invoice.status === 'Cancelled' ? 'line-through text-zinc-500' : ''} {invoice.isCreditNote ? 'text-violet-800 dark:text-violet-300' : ''}" onclick={() => onOpenInvoicePreview(invoice.id)}>
-                    {invoice.id}
-                  </button>
-                {:else}
-                  {invoice.id}
+                <span class="block text-left {invoice.status === 'Cancelled' ? 'line-through text-zinc-500' : ''} {invoice.isCreditNote ? 'text-violet-800 dark:text-violet-300' : ''}">{invoice.id}</span>
+                {#if invoice.title}
+                  <span class="mt-0.5 block max-w-[18rem] truncate font-sans text-[11px] font-normal italic text-zinc-500 dark:text-slate-400" title={invoice.title}>{invoice.title}</span>
                 {/if}
                 {#if invoice.poRef}
-                  <span class="ml-2 rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-600 dark:bg-slate-800 dark:text-slate-300">PO {invoice.poRef}</span>
+                  <span class="mr-1 mt-1 inline-block rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-600 dark:bg-slate-800 dark:text-slate-300">PO {invoice.poRef}</span>
                 {/if}
                 {#if invoice.isCreditNote && invoice.referenceInvoiceId}
-                  <span class="ml-1 inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold text-violet-900 dark:border-violet-700 dark:bg-violet-900/40 dark:text-violet-100">Storno of {invoice.referenceInvoiceId}</span>
+                  <span class="mt-1 inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold text-violet-900 dark:border-violet-700 dark:bg-violet-900/40 dark:text-violet-100">Storno of {invoice.referenceInvoiceId}</span>
                 {:else if invoice.creditNoteId}
-                  <span class="ml-1 inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold text-violet-900 dark:border-violet-700 dark:bg-violet-900/40 dark:text-violet-100">→ {invoice.creditNoteId}</span>
+                  <span class="mt-1 inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold text-violet-900 dark:border-violet-700 dark:bg-violet-900/40 dark:text-violet-100">→ {invoice.creditNoteId}</span>
                 {/if}
               </td>
               <td class="px-4 py-3 text-zinc-600 dark:text-slate-300">{invoice.created}</td>
               <td class="px-4 py-3">
                 <div class="flex flex-col gap-1">
-                  <span class="text-zinc-600 dark:text-slate-300">{invoice.due}</span>
+                  <span class="text-zinc-600 dark:text-slate-300">{invoice.due || '—'}</span>
                   {#if tag}
                     <span
                       class="inline-flex w-fit items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold {dueTagClass(
@@ -470,26 +492,26 @@
                   <span class="ml-1 text-[10px] uppercase text-zinc-400">{invoice.currency}</span>
                 {/if}
               </td>
-              <td class="px-4 py-3 text-right">
+              <td class="px-4 py-3 text-right" onclick={(e) => e.stopPropagation()}>
                 <div class="inline-flex justify-end gap-1">
                   {#if onOpenInvoicePreview}
                     <button
                       type="button"
                       class="rounded-md border border-zinc-200 bg-white p-2 text-zinc-700 hover:bg-zinc-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
                       onclick={() => onOpenInvoicePreview(invoice.id)}
-                      aria-label="Preview invoice {invoice.id}"
-                      title="Preview"
+                      aria-label="Open invoice {invoice.id}"
+                      title="Open"
                     >
                       <Eye class="h-4 w-4" aria-hidden="true" />
                     </button>
                   {/if}
-                  {#if canWrite && !isLocked}
+                  {#if canWrite && editable}
                     <button
                       type="button"
                       class="rounded-md border border-zinc-200 bg-white p-2 text-zinc-700 hover:bg-zinc-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
                       onclick={() => onEditInvoice(invoice.id)}
-                      aria-label="Edit invoice {invoice.id}"
-                      title="Edit invoice {invoice.id}"
+                      aria-label="Edit offer {invoice.id}"
+                      title="Edit offer"
                     >
                       <Pencil class="h-4 w-4" aria-hidden="true" />
                     </button>
@@ -532,13 +554,23 @@
             {#each cards as invoice}
               {@const tag = dueTag(invoice.status, invoice.due, now)}
               {@const meta = destructiveMeta(invoice)}
-              {@const isLocked = invoice.isCreditNote || invoice.status === 'Cancelled'}
-              <div class="rounded-lg border border-zinc-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+              {@const editable = isEditable(invoice)}
+              <div
+                role="button"
+                tabindex="0"
+                aria-label="Open {invoice.id}"
+                class="cursor-pointer rounded-lg border border-zinc-200 bg-white p-3 text-left shadow-sm transition hover:border-leah-300 hover:bg-leah-50/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-leah-700/40 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800/60"
+                onclick={() => onOpenInvoicePreview?.(invoice.id)}
+                onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpenInvoicePreview?.(invoice.id); } }}
+              >
                 <p class="font-mono text-xs font-semibold text-zinc-500 dark:text-slate-400">{invoice.id}</p>
                 <p class="mt-1 text-sm font-semibold text-zinc-900 dark:text-slate-100">{invoice.customer}</p>
+                {#if invoice.title}
+                  <p class="mt-0.5 truncate text-[11px] italic text-zinc-500 dark:text-slate-400">{invoice.title}</p>
+                {/if}
                 <p class="mt-2 text-sm font-bold tabular-nums text-leah-800 dark:text-leah-700">{currency(invoice.amount)}</p>
                 <p class="mt-1 flex flex-wrap items-center gap-2 text-xs text-zinc-500 dark:text-slate-400">
-                  <span>Due {invoice.due}</span>
+                  <span>{invoice.due ? `Due ${invoice.due}` : 'Offer · no due date'}</span>
                   {#if tag}
                     <span
                       class="inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold {dueTagClass(
@@ -549,17 +581,8 @@
                     </span>
                   {/if}
                 </p>
-                <div class="mt-3 flex flex-wrap gap-1">
-                  {#if onOpenInvoicePreview}
-                    <button
-                      type="button"
-                      class="flex-1 rounded-md border border-zinc-200 py-1.5 text-xs font-semibold text-leah-900 hover:bg-zinc-50 dark:border-slate-700 dark:text-slate-100 dark:hover:bg-slate-800"
-                      onclick={() => onOpenInvoicePreview(invoice.id)}
-                    >
-                      Preview
-                    </button>
-                  {/if}
-                  {#if canWrite && !isLocked}
+                <div class="mt-3 flex flex-wrap gap-1" role="presentation" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()}>
+                  {#if canWrite && editable}
                     <button
                       type="button"
                       class="flex-1 rounded-md border border-zinc-200 py-1.5 text-xs font-semibold text-leah-900 hover:bg-zinc-50 dark:border-slate-700 dark:text-slate-100 dark:hover:bg-slate-800"

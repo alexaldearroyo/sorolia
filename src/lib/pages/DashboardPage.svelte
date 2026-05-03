@@ -5,7 +5,9 @@
   import FolderKanban from 'lucide-svelte/icons/folder-kanban';
   import Briefcase from 'lucide-svelte/icons/briefcase';
   import CalendarDays from 'lucide-svelte/icons/calendar-days';
-  import { statusBadgeClass, dueTag, dueTagClass } from '../format.js';
+  import Receipt from 'lucide-svelte/icons/receipt';
+  import AlertTriangle from 'lucide-svelte/icons/alert-triangle';
+  import { statusBadgeClass, dueTag, dueTagClass, healthBadgeClass, parseDeDate } from '../format.js';
   import CashFlowChart from '../components/CashFlowChart.svelte';
 
   let {
@@ -29,13 +31,38 @@
     upcomingFortnight,
     topOverdueCustomer = '',
     cashTrendPct = 0,
+    inventory = [],
+    customers = [],
+    expenses = [],
     onGoCustomers,
     onGoInventory,
     onGoProjects,
+    onGoExpenses = () => {},
     onGoHR,
     onGoCalendar,
+    onOpenCustomer = () => {},
+    onOpenExpense = () => {},
     showHR = true
   } = $props();
+
+  let lowStockTop = $derived(
+    [...inventory]
+      .filter((r) => r.qty <= r.reorder)
+      .sort((a, b) => (a.qty / Math.max(1, a.reorder)) - (b.qty / Math.max(1, b.reorder)))
+      .slice(0, 4)
+  );
+
+  let atRiskList = $derived(customers.filter((c) => c.health === 'At risk').slice(0, 4));
+
+  let recentExpenses = $derived(
+    [...expenses]
+      .sort((a, b) => {
+        const da = parseDeDate(a.date)?.getTime() ?? 0;
+        const db = parseDeDate(b.date)?.getTime() ?? 0;
+        return db - da;
+      })
+      .slice(0, 5)
+  );
 
   const periodLabel = $derived(
     period === 'Monthly'
@@ -274,5 +301,148 @@
         </p>
       {/if}
     </div>
+  </article>
+</section>
+
+<section class="mt-6 grid gap-6 lg:grid-cols-3" aria-label="Operational signals">
+  <article class="rounded-xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+    <div class="flex flex-wrap items-start justify-between gap-2">
+      <div>
+        <h2 class="flex items-center gap-2 text-lg font-bold text-zinc-900 dark:text-slate-100">
+          <Package class="h-4 w-4 text-leah-700" aria-hidden="true" />
+          Stock to restock
+        </h2>
+        <p class="text-sm text-zinc-500 dark:text-slate-400">
+          {inventoryLowCount} SKU{inventoryLowCount === 1 ? '' : 's'} at or below reorder
+        </p>
+      </div>
+      <button
+        type="button"
+        class="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs font-semibold text-leah-900 hover:bg-zinc-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
+        onclick={onGoInventory}
+      >
+        Open
+      </button>
+    </div>
+    <ul class="mt-3 grid gap-2">
+      {#each lowStockTop as row}
+        {@const out = row.qty <= 0}
+        <li>
+          <button
+            type="button"
+            class="flex w-full items-center justify-between gap-2 rounded-lg border border-zinc-100 bg-zinc-50/80 px-3 py-2 text-left transition hover:border-leah-200 hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-leah-700/30 dark:border-slate-800 dark:bg-slate-800/40 dark:hover:bg-slate-800"
+            onclick={onGoInventory}
+          >
+            <span class="flex min-w-0 items-center gap-2">
+              <AlertTriangle class="h-4 w-4 shrink-0 {out ? 'text-rose-600' : 'text-amber-600'}" aria-hidden="true" />
+              <span class="min-w-0">
+                <span class="block truncate text-sm font-semibold text-zinc-900 dark:text-slate-100">{row.name}</span>
+                <span class="block text-[11px] font-mono text-zinc-500 dark:text-slate-400">{row.code}</span>
+              </span>
+            </span>
+            <span class="shrink-0 text-right">
+              <span class="block text-base font-extrabold tabular-nums {out ? 'text-rose-700' : 'text-amber-700'}">
+                {row.qty}
+              </span>
+              <span class="block text-[10px] uppercase tracking-wide text-zinc-400">/ {row.reorder}</span>
+            </span>
+          </button>
+        </li>
+      {:else}
+        <li class="rounded-lg border border-dashed border-zinc-200 bg-zinc-50/40 px-3 py-4 text-center text-xs text-zinc-500 dark:border-slate-700 dark:bg-slate-800/40">
+          Stock looks healthy across all SKUs.
+        </li>
+      {/each}
+    </ul>
+  </article>
+
+  <article class="rounded-xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+    <div class="flex flex-wrap items-start justify-between gap-2">
+      <div>
+        <h2 class="flex items-center gap-2 text-lg font-bold text-zinc-900 dark:text-slate-100">
+          <Users class="h-4 w-4 text-leah-700" aria-hidden="true" />
+          Customers · attention
+        </h2>
+        <p class="text-sm text-zinc-500 dark:text-slate-400">
+          {atRiskCustomers} flagged at risk · {customers.length} total
+        </p>
+      </div>
+      <button
+        type="button"
+        class="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs font-semibold text-leah-900 hover:bg-zinc-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
+        onclick={onGoCustomers}
+      >
+        All
+      </button>
+    </div>
+    <ul class="mt-3 grid gap-2">
+      {#each atRiskList as c}
+        <li>
+          <button
+            type="button"
+            class="flex w-full items-center justify-between gap-2 rounded-lg border border-zinc-100 bg-zinc-50/80 px-3 py-2 text-left transition hover:border-leah-200 hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-leah-700/30 dark:border-slate-800 dark:bg-slate-800/40 dark:hover:bg-slate-800"
+            onclick={() => onOpenCustomer(c.id)}
+          >
+            <span class="min-w-0">
+              <span class="block truncate text-sm font-semibold text-zinc-900 dark:text-slate-100">{c.name}</span>
+              <span class="block truncate text-[11px] text-zinc-500 dark:text-slate-400">
+                {c.segment ?? '—'} · {c.country ?? ''}
+              </span>
+            </span>
+            <span class="shrink-0 inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide {healthBadgeClass(c.health)}">
+              {c.health}
+            </span>
+          </button>
+        </li>
+      {:else}
+        <li class="rounded-lg border border-dashed border-zinc-200 bg-zinc-50/40 px-3 py-4 text-center text-xs text-zinc-500 dark:border-slate-700 dark:bg-slate-800/40">
+          No accounts are at risk right now.
+        </li>
+      {/each}
+    </ul>
+  </article>
+
+  <article class="rounded-xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+    <div class="flex flex-wrap items-start justify-between gap-2">
+      <div>
+        <h2 class="flex items-center gap-2 text-lg font-bold text-zinc-900 dark:text-slate-100">
+          <Receipt class="h-4 w-4 text-leah-700" aria-hidden="true" />
+          Recent expenses
+        </h2>
+        <p class="text-sm text-zinc-500 dark:text-slate-400">
+          {expensesCount} posting{expensesCount === 1 ? '' : 's'} · {currency(expenseTotal)} this period
+        </p>
+      </div>
+      <button
+        type="button"
+        class="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs font-semibold text-leah-900 hover:bg-zinc-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
+        onclick={onGoExpenses}
+      >
+        All
+      </button>
+    </div>
+    <ul class="mt-3 grid gap-2">
+      {#each recentExpenses as e}
+        <li>
+          <button
+            type="button"
+            class="flex w-full items-center justify-between gap-2 rounded-lg border border-zinc-100 bg-zinc-50/80 px-3 py-2 text-left transition hover:border-leah-200 hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-leah-700/30 dark:border-slate-800 dark:bg-slate-800/40 dark:hover:bg-slate-800"
+            onclick={() => onOpenExpense(e.id)}
+          >
+            <span class="min-w-0">
+              <span class="block truncate text-sm font-semibold text-zinc-900 dark:text-slate-100">{e.vendor}</span>
+              <span class="block text-[11px] text-zinc-500 dark:text-slate-400">{e.type} · {e.date}</span>
+            </span>
+            <span class="shrink-0 text-right tabular-nums">
+              <span class="block text-sm font-bold text-zinc-900 dark:text-slate-100">{currency(e.amount)}</span>
+            </span>
+          </button>
+        </li>
+      {:else}
+        <li class="rounded-lg border border-dashed border-zinc-200 bg-zinc-50/40 px-3 py-4 text-center text-xs text-zinc-500 dark:border-slate-700 dark:bg-slate-800/40">
+          No expenses logged yet.
+        </li>
+      {/each}
+    </ul>
   </article>
 </section>

@@ -3,9 +3,12 @@
   import FileText from 'lucide-svelte/icons/file-text';
   import X from 'lucide-svelte/icons/x';
   import Search from 'lucide-svelte/icons/search';
+  import FolderKanban from 'lucide-svelte/icons/folder-kanban';
+  import CalendarDays from 'lucide-svelte/icons/calendar-days';
   import { customerName } from '../workspaceActions.js';
   import { parseDeDate } from '../format.js';
   import EmptyState from '../components/EmptyState.svelte';
+  import CalendarPage from './CalendarPage.svelte';
 
   let {
     projects,
@@ -17,8 +20,20 @@
     projectCustomerLabel,
     onClearProjectCustomerFilter,
     onOpenCustomer,
-    onOpenInvoices
+    onOpenInvoices,
+    invoices = [],
+    expenseItems = [],
+    onOpenInvoiceEdit = () => {},
+    onOpenExpenseEdit = () => {},
+    onOpenProjectById = () => {},
+    initialView = 'projects'
   } = $props();
+
+  let projectView = $state(/** @type {'projects'|'calendar'} */ ('projects'));
+
+  $effect(() => {
+    if (initialView === 'calendar' || initialView === 'projects') projectView = initialView;
+  });
 
   let query = $state('');
   let statusFilter = $state(/** @type {'All'|'Active'|'Planning'|'On hold'} */ ('All'));
@@ -68,6 +83,41 @@
   }
 </script>
 
+<div class="mb-4 inline-flex rounded-lg border border-zinc-200 bg-zinc-50 p-0.5 dark:border-slate-700 dark:bg-slate-800" role="group" aria-label="Project view">
+  <button
+    type="button"
+    aria-pressed={projectView === 'projects'}
+    class="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold {projectView === 'projects'
+      ? 'bg-white text-leah-900 shadow-sm dark:bg-slate-900 dark:text-slate-100'
+      : 'text-zinc-600 hover:text-zinc-900 dark:text-slate-300 dark:hover:text-slate-100'}"
+    onclick={() => (projectView = 'projects')}
+  >
+    <FolderKanban class="h-3.5 w-3.5" aria-hidden="true" />
+    Projects
+  </button>
+  <button
+    type="button"
+    aria-pressed={projectView === 'calendar'}
+    class="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold {projectView === 'calendar'
+      ? 'bg-white text-leah-900 shadow-sm dark:bg-slate-900 dark:text-slate-100'
+      : 'text-zinc-600 hover:text-zinc-900 dark:text-slate-300 dark:hover:text-slate-100'}"
+    onclick={() => (projectView = 'calendar')}
+  >
+    <CalendarDays class="h-3.5 w-3.5" aria-hidden="true" />
+    Calendar
+  </button>
+</div>
+
+{#if projectView === 'calendar'}
+  <CalendarPage
+    {invoices}
+    {expenseItems}
+    {projects}
+    {onOpenInvoiceEdit}
+    {onOpenExpenseEdit}
+    {onOpenProjectById}
+  />
+{:else}
 <section class="rounded-xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
   <header class="mb-4 flex flex-wrap items-center gap-3">
     <div class="relative flex-1 min-w-[14rem]">
@@ -224,3 +274,4 @@
     </div>
   {/if}
 </section>
+{/if}

@@ -25,6 +25,7 @@
   let customerId = $state('');
   let dueIso = $state('');
   let status = $state('Open');
+  let title = $state('');
   let notes = $state('');
   let poRef = $state('');
   let invoiceCurrency = $state('EUR');
@@ -57,7 +58,8 @@
     if (!editor) return;
     if (editor.mode === 'create') {
       customerId = customers[0]?.id ?? '';
-      status = 'Open';
+      status = 'Offer';
+      title = '';
       dueIso = plusDaysIso(defaultTermsDays(customerId));
       notes = '';
       poRef = '';
@@ -68,6 +70,7 @@
     } else if (draftRow) {
       customerId = draftRow.customerId;
       status = draftRow.status;
+      title = draftRow.title ?? '';
       dueIso = deDateToIso(draftRow.due) || plusDaysIso(defaultTermsDays(draftRow.customerId));
       notes = draftRow.notes ?? '';
       poRef = draftRow.poRef ?? '';
@@ -135,7 +138,7 @@
       errors.customerId = 'Choose a valid customer.';
       ok = false;
     }
-    if (!dueIso) {
+    if (status !== 'Offer' && !dueIso) {
       errors.due = 'Pick a due date.';
       ok = false;
     }
@@ -150,10 +153,11 @@
   }
 
   function buildPayload() {
-    const dueDe = isoDateToDe(dueIso);
+    const dueDe = status === 'Offer' ? '' : isoDateToDe(dueIso);
     return {
       customerId,
       status,
+      title: title.trim(),
       dueDe,
       due: dueDe,
       notes: notes.trim(),
@@ -192,14 +196,21 @@
   }
 
   const open = $derived(editor !== null);
-  const title = $derived(
-    editor?.mode === 'create' ? 'New invoice' : draftRow ? `Edit ${draftRow.id}` : 'Edit invoice'
+  const heading = $derived(
+    editor?.mode === 'create' ? 'New offer' : draftRow ? `Edit ${draftRow.id}` : 'Edit offer'
   );
 
   const vatOptions = $derived(settings?.vatRates?.length ? settings.vatRates : [0, 7, 19]);
 
   const expectedDue = $derived(
     customerId ? expectedDueFromTerms(customers.find((c) => c.id === customerId), settings) : ''
+  );
+
+  /* Issued invoices are immutable for tax / audit reasons. The UI should not
+     reach this state in normal use (the Edit button is hidden for non-offers),
+     but this gate is the safety net in case it does. */
+  const isEditingIssued = $derived(
+    editor?.mode === 'edit' && draftRow && draftRow.status !== 'Offer'
   );
 </script>
 
@@ -220,7 +231,7 @@
     >
       <header class="flex items-start justify-between gap-3 border-b border-zinc-100 px-6 py-4">
         <div>
-          <h2 id="invoice-form-title" class="text-lg font-bold text-zinc-900">{title}</h2>
+          <h2 id="invoice-form-title" class="text-lg font-bold text-zinc-900">{heading}</h2>
           <p class="mt-1 text-xs text-zinc-500">
             {invoiceCurrency} · DD/MM/YYYY · default VAT {defaultVat()}% · totals computed from lines.
           </p>
@@ -236,11 +247,25 @@
       </header>
 
       <div class="flex-1 overflow-y-auto px-6 py-5">
+        {#if isEditingIssued}
+          <p class="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            This invoice has already been issued and is locked for tax & audit reasons. Cancel it via credit note (Storno) to issue a corrected one. Only offers can be edited.
+          </p>
+        {/if}
         {#if errors.general}
           <p class="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-900">{errors.general}</p>
         {/if}
 
         <div class="grid gap-4 sm:grid-cols-2">
+          <label class="grid gap-1.5 text-sm font-semibold text-zinc-700 sm:col-span-2">
+            Title / subject <span class="font-normal text-zinc-400">(visible on the invoice and in lists)</span>
+            <input
+              bind:value={title}
+              maxlength="120"
+              placeholder="e.g. Q1 commissioning batch · Klärmann"
+              class="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm"
+            />
+          </label>
           <label class="grid gap-1.5 text-sm font-semibold text-zinc-700">
             Customer
             <select
@@ -266,22 +291,31 @@
               <option>Paid</option>
               <option>Overdue</option>
             </select>
+            <span class="text-[11px] text-zinc-500">
+              {#if status === 'Offer'}
+                An offer has no due date yet — set one once you issue it.
+              {:else}
+                Issued documents are locked once saved.
+              {/if}
+            </span>
           </label>
-          <label class="grid gap-1.5 text-sm font-semibold text-zinc-700">
-            Due date
-            <input
-              bind:value={dueIso}
-              type="date"
-              aria-invalid={errors.due ? 'true' : 'false'}
-              class="rounded-lg border bg-white px-3 py-2 text-sm {errors.due ? 'border-rose-500' : 'border-zinc-200'}"
-            />
-            {#if expectedDue && editor?.mode === 'create'}
-              <span class="text-[11px] text-zinc-500">Customer terms suggest <button type="button" class="underline underline-offset-2 hover:text-leah-800" onclick={() => (dueIso = plusDaysIso(defaultTermsDays(customerId)))}>{expectedDue}</button></span>
-            {/if}
-            {#if errors.due}
-              <span class="text-xs font-medium text-rose-700">{errors.due}</span>
-            {/if}
-          </label>
+          {#if status !== 'Offer'}
+            <label class="grid gap-1.5 text-sm font-semibold text-zinc-700">
+              Due date
+              <input
+                bind:value={dueIso}
+                type="date"
+                aria-invalid={errors.due ? 'true' : 'false'}
+                class="rounded-lg border bg-white px-3 py-2 text-sm {errors.due ? 'border-rose-500' : 'border-zinc-200'}"
+              />
+              {#if expectedDue && editor?.mode === 'create'}
+                <span class="text-[11px] text-zinc-500">Customer terms suggest <button type="button" class="underline underline-offset-2 hover:text-leah-800" onclick={() => (dueIso = plusDaysIso(defaultTermsDays(customerId)))}>{expectedDue}</button></span>
+              {/if}
+              {#if errors.due}
+                <span class="text-xs font-medium text-rose-700">{errors.due}</span>
+              {/if}
+            </label>
+          {/if}
           <label class="grid gap-1.5 text-sm font-semibold text-zinc-700">
             Currency
             <select bind:value={invoiceCurrency} class="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm">
@@ -470,10 +504,12 @@
           </button>
           <button
             type="button"
-            class="rounded-lg bg-leah-900 px-4 py-2 text-sm font-semibold text-white hover:bg-leah-950"
+            class="rounded-lg bg-leah-900 px-4 py-2 text-sm font-semibold text-white hover:bg-leah-950 disabled:cursor-not-allowed disabled:bg-zinc-300"
             onclick={submit}
+            disabled={isEditingIssued}
+            title={isEditingIssued ? 'Issued invoices cannot be edited' : null}
           >
-            {editor?.mode === 'create' ? 'Create invoice' : 'Save changes'}
+            {editor?.mode === 'create' ? 'Create offer' : 'Save changes'}
           </button>
         </div>
       </footer>

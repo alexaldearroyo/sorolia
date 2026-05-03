@@ -4,6 +4,7 @@
   import Menu from 'lucide-svelte/icons/menu';
   import X from 'lucide-svelte/icons/x';
   import ArrowLeft from 'lucide-svelte/icons/arrow-left';
+  import AlertTriangle from 'lucide-svelte/icons/alert-triangle';
   import UserMenu from './UserMenu.svelte';
   import NotificationsPanel from './NotificationsPanel.svelte';
   import { t } from '../i18n.js';
@@ -17,6 +18,8 @@
     notifications = [],
     mobileNavOpen,
     backTarget = null,
+    capitalAlert = null,
+    onCapitalAlertClick = () => {},
     onToggleMobileNav,
     onAccount,
     onSettings,
@@ -94,6 +97,31 @@
   >
     <Search class="h-4 w-4" aria-hidden="true" />
   </button>
+
+  {#if capitalAlert}
+    <button
+      type="button"
+      class="hidden items-center gap-1.5 rounded-full border-2 px-3 py-1 text-xs font-extrabold uppercase tracking-wide shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-300 sm:inline-flex {capitalAlert.severity === 'critical'
+        ? 'animate-pulse border-rose-700 bg-rose-600 text-white hover:bg-rose-700'
+        : 'border-amber-500 bg-amber-100 text-amber-900 hover:bg-amber-200 dark:border-amber-600 dark:bg-amber-900/60 dark:text-amber-100 dark:hover:bg-amber-900'}"
+      onclick={onCapitalAlertClick}
+      title="Working capital below threshold · click to open dashboard"
+    >
+      <AlertTriangle class="h-3.5 w-3.5" aria-hidden="true" />
+      <span>{capitalAlert.label}</span>
+    </button>
+    <button
+      type="button"
+      class="inline-flex h-9 w-9 items-center justify-center rounded-lg sm:hidden {capitalAlert.severity === 'critical'
+        ? 'animate-pulse bg-rose-600 text-white'
+        : 'bg-amber-200 text-amber-900'}"
+      onclick={onCapitalAlertClick}
+      aria-label={capitalAlert.label}
+      title={capitalAlert.label}
+    >
+      <AlertTriangle class="h-4 w-4" aria-hidden="true" />
+    </button>
+  {/if}
 
   <span
     class="hidden rounded-full border border-sky-200 bg-sky-50 px-2.5 py-0.5 text-xs font-semibold text-sky-900 md:inline xl:order-none dark:border-sky-700 dark:bg-sky-900/40 dark:text-sky-200"
