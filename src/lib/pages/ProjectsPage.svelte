@@ -14,6 +14,7 @@
     totalProjects,
     customers,
     currency,
+    locale = 'en-GB',
     paidByCustomerId,
     projectCustomerFilter,
     projectCustomerLabel,
@@ -270,6 +271,8 @@
       {invoices}
       {expenseItems}
       projects={projects}
+      {customers}
+      {locale}
       {onOpenInvoiceEdit}
       {onOpenExpenseEdit}
       {onOpenProjectById}

@@ -8,12 +8,14 @@
     getCalendarGrid,
     formatIsoToDe
   } from '../calendarUtils.js';
-  import { currency } from '../format.js';
+  import { invoiceAmount } from '../format.js';
 
   let {
     invoices,
     expenseItems,
     projects,
+    customers = [],
+    locale = 'en-GB',
     onOpenInvoiceEdit,
     onOpenExpenseEdit,
     onOpenProjectById,
@@ -46,7 +48,7 @@
     viewMonth = d.getMonth();
   }
 
-  let eventsRaw = $derived(collectWorkspaceEvents(invoices, expenseItems, projects));
+  let eventsRaw = $derived(collectWorkspaceEvents(invoices, expenseItems, projects, customers));
   let eventsFlat = $derived.by(() => {
     if (eventKindFilter === 'all') return eventsRaw;
     return eventsRaw.filter((e) => e.kind === eventKindFilter);
@@ -158,18 +160,24 @@
             type="button"
             aria-label={cellAriaLabel(cell, dayEvents.length)}
             aria-pressed={selectedDay === cell.isoKey}
-            class="min-h-[4.5rem] bg-white p-1.5 text-left transition hover:bg-zinc-50 dark:bg-slate-900 dark:hover:bg-slate-800 sm:min-h-[5.25rem] {!cell.inMonth
+            class="min-h-[5.5rem] bg-white p-1.5 text-left transition hover:bg-zinc-50 dark:bg-slate-900 dark:hover:bg-slate-800 sm:min-h-[6.5rem] {!cell.inMonth
               ? 'opacity-40'
               : ''} {selectedDay === cell.isoKey ? 'ring-2 ring-inset ring-leah-700' : ''}"
             onclick={() => (selectedDay = cell.isoKey)}
           >
             <span class="text-xs font-semibold text-zinc-800 dark:text-slate-200" aria-hidden="true">{cell.date.getDate()}</span>
-            <div class="mt-1 flex flex-wrap gap-0.5">
-              {#each dayEvents.slice(0, 4) as ev}
-                <span class="h-1.5 w-1.5 shrink-0 rounded-full {dotClass(ev.kind)}" title={ev.title}></span>
+            <div class="mt-1 space-y-0.5 overflow-hidden">
+              {#each dayEvents.slice(0, 2) as ev}
+                <p class="flex min-w-0 items-center gap-1 text-[11px] leading-snug text-zinc-600 dark:text-slate-300 sm:text-xs" title={ev.title}>
+                  <span class="h-2 w-2 shrink-0 rounded-full {dotClass(ev.kind)}" aria-hidden="true"></span>
+                  <span class="min-w-0 truncate font-medium">{ev.summary}</span>
+                  {#if ev.amount != null}
+                    <span class="ml-auto shrink-0 tabular-nums text-zinc-400 dark:text-slate-500">{invoiceAmount(ev.amount, ev.currency)}</span>
+                  {/if}
+                </p>
               {/each}
-              {#if dayEvents.length > 4}
-                <span class="text-[9px] font-bold text-zinc-400 dark:text-slate-500">+{dayEvents.length - 4}</span>
+              {#if dayEvents.length > 2}
+                <p class="text-[11px] font-bold text-zinc-400 dark:text-slate-500 sm:text-xs">+{dayEvents.length - 2} more</p>
               {/if}
             </div>
           </button>
@@ -185,7 +193,7 @@
 
     <aside class="rounded-xl border border-zinc-200 bg-zinc-50/60 p-4 dark:border-slate-700 dark:bg-slate-800/60">
       {#if selectedDay}
-        <h3 class="text-sm font-bold text-zinc-900 dark:text-slate-100">{formatIsoToDe(selectedDay)}</h3>
+        <h3 class="text-sm font-bold text-zinc-900 dark:text-slate-100">{formatIsoToDe(selectedDay, locale)}</h3>
         <p class="mt-1 text-xs text-zinc-500 dark:text-slate-400">{selectedEvents.length} event{selectedEvents.length === 1 ? '' : 's'}</p>
         <ul class="mt-3 max-h-[min(60vh,28rem)] space-y-2 overflow-y-auto">
           {#each selectedEvents as ev}
@@ -198,10 +206,11 @@
                 <span class="block text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-slate-500"
                   >{ev.kind.replaceAll('-', ' ')}</span
                 >
-                <span class="mt-0.5 block font-medium text-zinc-900 dark:text-slate-100">{ev.title}</span>
+                <span class="mt-0.5 block font-medium text-zinc-900 dark:text-slate-100">{ev.summary || ev.title}</span>
                 {#if ev.amount != null}
-                  <span class="mt-0.5 block text-xs tabular-nums text-zinc-600 dark:text-slate-300">{currency(ev.amount)}</span>
+                  <span class="mt-0.5 block text-xs tabular-nums text-zinc-600 dark:text-slate-300">{invoiceAmount(ev.amount, ev.currency)}</span>
                 {/if}
+                <span class="mt-0.5 block text-[10px] text-zinc-400 dark:text-slate-500">{ev.title}</span>
               </button>
             </li>
           {:else}

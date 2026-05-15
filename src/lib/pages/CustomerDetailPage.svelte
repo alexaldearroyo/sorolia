@@ -6,7 +6,7 @@
   import Package from 'lucide-svelte/icons/package';
   import Receipt from 'lucide-svelte/icons/receipt';
   import { customerName } from '../workspaceActions.js';
-  import { statusBadgeClass } from '../format.js';
+  import { statusBadgeClass, invoiceAmount } from '../format.js';
 
   let {
     customer,
@@ -247,7 +247,7 @@
                     <span class="inline-flex w-fit rounded-md px-2.5 py-1 text-xs font-bold ring-1 {statusBadgeClass(inv.status)}">
                       {inv.status}
                     </span>
-                    <span class="text-right tabular-nums text-sm font-semibold text-zinc-900">{currency(inv.amount)}</span>
+                    <span class="text-right tabular-nums text-sm font-semibold text-zinc-900">{invoiceAmount(inv.amount, inv.currency)}</span>
                   </button>
                 </li>
               {/each}

@@ -6,8 +6,7 @@
   import Eye from 'lucide-svelte/icons/eye';
   import Download from 'lucide-svelte/icons/download';
   import Repeat from 'lucide-svelte/icons/repeat';
-  import { statusBadgeClass, dueTag, dueTagClass } from '../format.js';
-  import { currencyLabel } from '../fx.js';
+  import { statusBadgeClass, dueTag, dueTagClass, invoiceAmount } from '../format.js';
   import { isIssuedInvoice } from '../workspaceActions.js';
   import InvoiceFormModal from '../components/InvoiceFormModal.svelte';
   import EmptyState from '../components/EmptyState.svelte';
@@ -27,6 +26,7 @@
     invoiceEditor,
     invoiceDraftRow,
     companySettings = null,
+    locale = 'en-GB',
     templates = [],
     canWrite = false,
     canDelete = false,
@@ -136,6 +136,7 @@
   draftRow={invoiceDraftRow}
   {customers}
   settings={companySettings}
+  {locale}
   {canDelete}
   onClose={onCloseInvoiceEditor}
   onCreate={onSaveInvoiceCreate}
@@ -252,6 +253,7 @@
         <div class="flex flex-wrap items-center gap-2">
           <input
             type="date"
+            lang={locale}
             value={dateRange.from}
             oninput={(e) => setRange(e.currentTarget.value, dateRange.to)}
             class="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
@@ -260,6 +262,7 @@
           <span aria-hidden="true" class="text-zinc-400">→</span>
           <input
             type="date"
+            lang={locale}
             value={dateRange.to}
             oninput={(e) => setRange(dateRange.from, e.currentTarget.value)}
             class="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
@@ -361,7 +364,7 @@
           <p class="mt-2 text-xs text-zinc-500 dark:text-slate-400">{invoice.created}{invoice.due ? ` → ${invoice.due}` : ''}{invoice.poRef ? ` · PO ${invoice.poRef}` : ''}</p>
           <div class="mt-1 flex items-center justify-between">
             <span class="text-base font-bold tabular-nums text-zinc-900 dark:text-slate-100 {invoice.isCreditNote ? 'text-violet-800 dark:text-violet-300' : ''}">
-              {currency(invoice.amount)}{invoice.currency && invoice.currency !== 'EUR' ? ` ${currencyLabel(invoice.currency)}` : ''}
+              {invoiceAmount(invoice.amount, invoice.currency)}
             </span>
             {#if tag}
               <span class="inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold {dueTagClass(tag.kind)}">
@@ -483,14 +486,11 @@
                   {invoice.status}
                 </span>
                 {#if invoice.status === 'Partially paid'}
-                  <span class="mt-1 block text-[10px] text-sky-700 dark:text-sky-200">Paid {currency(invoice.amountPaid ?? 0)}</span>
+                  <span class="mt-1 block text-[10px] text-sky-700 dark:text-sky-200">Paid {invoiceAmount(invoice.amountPaid ?? 0, invoice.currency)}</span>
                 {/if}
               </td>
               <td class="px-4 py-3 text-right font-semibold tabular-nums text-zinc-900 dark:text-slate-100 {invoice.isCreditNote ? 'text-violet-800 dark:text-violet-300' : ''}">
-                {currency(invoice.amount)}
-                {#if invoice.currency && invoice.currency !== 'EUR'}
-                  <span class="ml-1 text-[10px] uppercase text-zinc-400">{invoice.currency}</span>
-                {/if}
+                {invoiceAmount(invoice.amount, invoice.currency)}
               </td>
               <td class="px-4 py-3 text-right" onclick={(e) => e.stopPropagation()}>
                 <div class="inline-flex justify-end gap-1">
@@ -568,7 +568,7 @@
                 {#if invoice.title}
                   <p class="mt-0.5 truncate text-[11px] italic text-zinc-500 dark:text-slate-400">{invoice.title}</p>
                 {/if}
-                <p class="mt-2 text-sm font-bold tabular-nums text-leah-800 dark:text-leah-700">{currency(invoice.amount)}</p>
+                <p class="mt-2 text-sm font-bold tabular-nums text-leah-800 dark:text-leah-700">{invoiceAmount(invoice.amount, invoice.currency)}</p>
                 <p class="mt-1 flex flex-wrap items-center gap-2 text-xs text-zinc-500 dark:text-slate-400">
                   <span>{invoice.due ? `Due ${invoice.due}` : 'Offer · no due date'}</span>
                   {#if tag}

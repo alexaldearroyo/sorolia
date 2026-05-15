@@ -15,6 +15,7 @@
     expenseTotal,
     customers,
     currency,
+    locale = 'en-GB',
     canWrite = false,
     canDelete = false,
     canExport = false,
@@ -109,6 +110,7 @@
   editor={expenseEditor}
   draftRow={expenseDraft}
   {customers}
+  {locale}
   {canDelete}
   onClose={closeEditor}
   onSave={saveFromModal}

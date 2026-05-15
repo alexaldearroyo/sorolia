@@ -1,5 +1,12 @@
+import { formatMoney } from './fx.js';
+
 export function currency(value) {
   return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(value);
+}
+
+/** Invoice line amounts — uses the invoice currency, not the workspace EUR helper above. */
+export function invoiceAmount(amount, code = 'EUR') {
+  return formatMoney(Number(amount) || 0, code || 'EUR', 'de-DE');
 }
 
 export function statusBadgeClass(status) {

@@ -1,27 +1,38 @@
-import { deDateToIso } from './workspaceActions.js';
+import { deDateToIso, customerName } from './workspaceActions.js';
 
 /**
- * @typedef {{ dayKey: string, kind: string, title: string, refId: string, amount?: number, status?: string, customerId?: string }} CalendarEvent
+ * @typedef {{ dayKey: string, kind: string, title: string, summary: string, refId: string, amount?: number, currency?: string, status?: string, customerId?: string }} CalendarEvent
  */
 
+/** Short label for calendar cells — drops trailing “(City)” when present. */
+export function customerShortLabel(customers, customerId) {
+  const full = customerName(customers, customerId);
+  const cut = full.indexOf(' (');
+  return cut > 0 ? full.slice(0, cut) : full;
+}
+
 /**
- * @param {Array<{ due: string, created: string, id: string, customerId: string, status: string, amount: number }>} invoices
+ * @param {Array<{ due: string, created: string, id: string, customerId: string, status: string, amount: number, currency?: string }>} invoices
  * @param {Array<{ date: string, vendor: string, amount: number, id: string }>} expenseItems
  * @param {Array<{ id: string, name: string, customerId: string, nextReview?: string }>} projects
+ * @param {Array<{ id: string, name: string }>} [customers]
  */
-export function collectWorkspaceEvents(invoices, expenseItems, projects) {
+export function collectWorkspaceEvents(invoices, expenseItems, projects, customers = []) {
   /** @type {CalendarEvent[]} */
   const out = [];
 
   for (const inv of invoices) {
+    const who = customerShortLabel(customers, inv.customerId);
     const dueK = deDateToIso(inv.due);
     if (dueK) {
       out.push({
         dayKey: dueK,
         kind: 'invoice-due',
         title: `${inv.id} · due`,
+        summary: who,
         refId: inv.id,
         amount: inv.amount,
+        currency: inv.currency ?? 'EUR',
         status: inv.status,
         customerId: inv.customerId
       });
@@ -32,7 +43,10 @@ export function collectWorkspaceEvents(invoices, expenseItems, projects) {
         dayKey: crK,
         kind: 'invoice-created',
         title: `${inv.id} · issued`,
+        summary: who,
         refId: inv.id,
+        amount: inv.amount,
+        currency: inv.currency ?? 'EUR',
         customerId: inv.customerId
       });
     }
@@ -45,8 +59,10 @@ export function collectWorkspaceEvents(invoices, expenseItems, projects) {
         dayKey: k,
         kind: 'expense',
         title: e.vendor,
+        summary: e.vendor,
         refId: e.id,
-        amount: e.amount
+        amount: e.amount,
+        currency: 'EUR'
       });
     }
   }
@@ -59,6 +75,7 @@ export function collectWorkspaceEvents(invoices, expenseItems, projects) {
           dayKey: k,
           kind: 'project-review',
           title: `${p.name} · review`,
+          summary: p.name,
           refId: p.id,
           customerId: p.customerId
         });
@@ -102,10 +119,10 @@ export function getCalendarGrid(year, monthIndex0) {
   return cells;
 }
 
-export function formatIsoToDe(isoKey) {
+export function formatIsoToDe(isoKey, locale = 'en-GB') {
   const [y, m, d] = isoKey.split('-').map((x) => Number.parseInt(x, 10));
   if (!y || !m || !d) return isoKey;
-  return new Date(y, m - 1, d).toLocaleDateString('de-DE');
+  return new Date(y, m - 1, d).toLocaleDateString(locale);
 }
 
 export function isoKeyFromDate(d) {

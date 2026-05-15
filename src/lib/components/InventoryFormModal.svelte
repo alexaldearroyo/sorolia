@@ -132,7 +132,7 @@
       role="dialog"
       aria-modal="true"
       aria-labelledby="inventory-form-title"
-      class="relative z-10 w-full max-w-lg rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900"
+      class="relative z-10 w-full max-w-lg overflow-hidden rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900"
     >
       <div class="flex items-start justify-between gap-3">
         <h2 id="inventory-form-title" class="text-lg font-bold text-zinc-900 dark:text-slate-100">{title}</h2>
@@ -146,71 +146,71 @@
         </button>
       </div>
 
-      <div class="mt-5 grid gap-4 sm:grid-cols-2">
-        <label class="grid gap-1.5 text-sm font-semibold text-zinc-700 dark:text-slate-300">
+      <div class="mt-5 grid min-w-0 gap-4 sm:grid-cols-2">
+        <label class="grid min-w-0 gap-1.5 text-sm font-semibold text-zinc-700 dark:text-slate-300">
           SKU code
           <input
             bind:value={code}
-            class="rounded-lg border bg-white px-3 py-2 text-sm font-mono uppercase tracking-wide dark:bg-slate-900 dark:text-slate-100 {errors.code ? 'border-rose-500' : 'border-zinc-200 dark:border-slate-700'}"
+            class="w-full min-w-0 rounded-lg border bg-white px-3 py-2 text-sm font-mono uppercase tracking-wide dark:bg-slate-900 dark:text-slate-100 {errors.code ? 'border-rose-500' : 'border-zinc-200 dark:border-slate-700'}"
             placeholder="e.g. KIT-007"
           />
           {#if errors.code}
             <span class="text-xs font-medium text-rose-700">{errors.code}</span>
           {/if}
         </label>
-        <label class="grid gap-1.5 text-sm font-semibold text-zinc-700 dark:text-slate-300 sm:col-span-1">
+        <label class="grid min-w-0 gap-1.5 text-sm font-semibold text-zinc-700 dark:text-slate-300">
           Item name
           <input
             bind:value={name}
-            class="rounded-lg border bg-white px-3 py-2 text-sm dark:bg-slate-900 dark:text-slate-100 {errors.name ? 'border-rose-500' : 'border-zinc-200 dark:border-slate-700'}"
+            class="w-full min-w-0 rounded-lg border bg-white px-3 py-2 text-sm dark:bg-slate-900 dark:text-slate-100 {errors.name ? 'border-rose-500' : 'border-zinc-200 dark:border-slate-700'}"
             placeholder="e.g. EnergyMaster Edge Inverter"
           />
           {#if errors.name}
             <span class="text-xs font-medium text-rose-700">{errors.name}</span>
           {/if}
         </label>
-        <label class="grid gap-1.5 text-sm font-semibold text-zinc-700 dark:text-slate-300">
+        <label class="grid min-w-0 gap-1.5 text-sm font-semibold text-zinc-700 dark:text-slate-300">
           On-hand qty
           <input
             bind:value={qty}
             type="number"
             min="0"
             step="1"
-            class="rounded-lg border bg-white px-3 py-2 text-sm tabular-nums dark:bg-slate-900 dark:text-slate-100 {errors.qty ? 'border-rose-500' : 'border-zinc-200 dark:border-slate-700'}"
+            class="w-full min-w-0 rounded-lg border bg-white px-3 py-2 text-sm tabular-nums dark:bg-slate-900 dark:text-slate-100 {errors.qty ? 'border-rose-500' : 'border-zinc-200 dark:border-slate-700'}"
           />
           {#if errors.qty}
             <span class="text-xs font-medium text-rose-700">{errors.qty}</span>
           {/if}
         </label>
-        <label class="grid gap-1.5 text-sm font-semibold text-zinc-700 dark:text-slate-300">
+        <label class="grid min-w-0 gap-1.5 text-sm font-semibold text-zinc-700 dark:text-slate-300">
           Reorder point
           <input
             bind:value={reorder}
             type="number"
             min="0"
             step="1"
-            class="rounded-lg border bg-white px-3 py-2 text-sm tabular-nums dark:bg-slate-900 dark:text-slate-100 {errors.reorder ? 'border-rose-500' : 'border-zinc-200 dark:border-slate-700'}"
+            class="w-full min-w-0 rounded-lg border bg-white px-3 py-2 text-sm tabular-nums dark:bg-slate-900 dark:text-slate-100 {errors.reorder ? 'border-rose-500' : 'border-zinc-200 dark:border-slate-700'}"
           />
           {#if errors.reorder}
             <span class="text-xs font-medium text-rose-700">{errors.reorder}</span>
           {/if}
         </label>
-        <label class="grid gap-1.5 text-sm font-semibold text-zinc-700 dark:text-slate-300">
+        <label class="grid min-w-0 gap-1.5 text-sm font-semibold text-zinc-700 dark:text-slate-300">
           Unit cost (EUR)
           <input
             bind:value={unitCost}
             type="number"
             min="0"
             step="1"
-            class="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm tabular-nums dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+            class="w-full min-w-0 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm tabular-nums dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
             placeholder="0"
           />
         </label>
-        <label class="grid gap-1.5 text-sm font-semibold text-zinc-700 dark:text-slate-300">
+        <label class="grid min-w-0 gap-1.5 text-sm font-semibold text-zinc-700 dark:text-slate-300">
           Supplier
           <select
             bind:value={supplierId}
-            class="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+            class="w-full min-w-0 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
           >
             <option value="">— none —</option>
             {#each customers as c}
@@ -218,12 +218,12 @@
             {/each}
           </select>
         </label>
-        <label class="grid gap-1.5 text-sm font-semibold text-zinc-700 dark:text-slate-300 sm:col-span-2">
+        <label class="grid min-w-0 gap-1.5 text-sm font-semibold text-zinc-700 dark:text-slate-300 sm:col-span-2">
           Notes (optional)
           <textarea
             bind:value={notes}
             rows="2"
-            class="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+            class="w-full min-w-0 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
             placeholder="Lead time, vendor reference…"
           ></textarea>
         </label>

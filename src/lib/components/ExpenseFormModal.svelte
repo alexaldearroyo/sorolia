@@ -5,7 +5,7 @@
   import { useEscape } from '../escape.js';
   import { lockDialogFocus } from '../dialogFocus.js';
 
-  let { editor, draftRow, customers, onClose, onSave, onDelete } = $props();
+  let { editor, draftRow, customers, locale = 'en-GB', onClose, onSave, onDelete } = $props();
 
   let vendor = $state('');
   let type = $state('General');
@@ -162,6 +162,7 @@
           <input
             bind:value={dateIso}
             type="date"
+            lang={locale}
             class="rounded-lg border bg-white px-3 py-2 text-sm {errors.date ? 'border-rose-500' : 'border-zinc-200'}"
           />
           {#if errors.date}

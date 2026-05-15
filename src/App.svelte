@@ -266,7 +266,7 @@
   });
 
   let upcomingFortnight = $derived.by(() => {
-    const ev = collectWorkspaceEvents(invoices, expenseItems, projects);
+    const ev = collectWorkspaceEvents(invoices, expenseItems, projects, customers);
     const now = new Date();
     const end = new Date(now);
     end.setDate(end.getDate() + 14);
@@ -1302,6 +1302,7 @@
   $effect(() => {
     if (typeof document === 'undefined') return;
     document.documentElement.dataset.theme = theme;
+    document.documentElement.lang = locale;
   });
 
   $effect(() => setLocale(locale));
@@ -1512,6 +1513,7 @@
                 {visibleInvoices}
                 {kanbanColumns}
                 {currency}
+                {locale}
                 {customers}
                 templates={invoiceTemplates}
                 {invoiceCustomerFilter}
@@ -1542,6 +1544,7 @@
                 {expenseTotal}
                 {customers}
                 {currency}
+                {locale}
                 canWrite={can(role, 'expenses.write')}
                 canDelete={can(role, 'expenses.delete')}
                 canExport={can(role, 'workspace.export')}
@@ -1616,6 +1619,7 @@
                 totalProjects={projects.length}
                 {customers}
                 {currency}
+                {locale}
                 paidByCustomerId={paidForCustomer}
                 projectCustomerFilter={projectCustomerFilter}
                 projectCustomerLabel={projectCustomerLabel}

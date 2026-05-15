@@ -14,6 +14,7 @@
     draftRow,
     customers,
     settings = null,
+    locale = 'en-GB',
     canDelete = true,
     onClose,
     onCreate,
@@ -305,6 +306,7 @@
               <input
                 bind:value={dueIso}
                 type="date"
+                lang={locale}
                 aria-invalid={errors.due ? 'true' : 'false'}
                 class="rounded-lg border bg-white px-3 py-2 text-sm {errors.due ? 'border-rose-500' : 'border-zinc-200'}"
               />
