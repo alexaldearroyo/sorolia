@@ -51,14 +51,13 @@
  * Subtle page transition: applied to the main content wrapper in App.svelte.
  * Uses `prefers-reduced-motion` to stay accessible for users who opt out.
  */
+/* Opacity only — translateY on a scroll parent + SVG triggers stripe glitches on some tablet WebKit builds. */
 @keyframes emi-page-fade-in {
   from {
     opacity: 0;
-    transform: translateY(6px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
   }
 }
 

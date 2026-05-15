@@ -91,29 +91,19 @@
       .slice(0, 4);
   });
 
-  let expenseSpark30d = $derived.by(() => {
+  let expenseLast30dTotal = $derived.by(() => {
     const end = new Date();
     end.setHours(23, 59, 59, 999);
     const start = new Date(end);
     start.setDate(start.getDate() - 29);
     start.setHours(0, 0, 0, 0);
-    const days = [];
-    for (let i = 0; i < 30; i++) {
-      const d = new Date(start);
-      d.setDate(start.getDate() + i);
-      days.push(d.toLocaleDateString('en-CA'));
-    }
-    /** @type {Record<string, number>} */
-    const amounts = Object.fromEntries(days.map((k) => [k, 0]));
+    let total = 0;
     for (const e of expenses) {
       const dt = parseDeDate(e.date);
-      if (!dt) continue;
-      const key = dt.toLocaleDateString('en-CA');
-      if (key in amounts) amounts[key] += Number(e.amount) || 0;
+      if (!dt || dt < start || dt > end) continue;
+      total += Number(e.amount) || 0;
     }
-    const total = Object.values(amounts).reduce((s, n) => s + n, 0);
-    const max = Math.max(1, ...Object.values(amounts));
-    return { total, max, bars: days.map((day) => ({ day, amt: amounts[day], pct: (amounts[day] / max) * 100 })) };
+    return total;
   });
 
   const periodLabel = $derived(
@@ -296,7 +286,7 @@
       </div>
     </div>
 
-    <div class="mt-4">
+    <div class="mt-4 min-w-0 overflow-hidden">
       <CashFlowChart bars={cashBars} layout={chartLayout} {periodLabel} />
     </div>
     <div class="mt-4 flex flex-wrap gap-4 text-sm text-zinc-600 dark:text-slate-300">
@@ -362,7 +352,7 @@
   </article>
 </section>
 
-<section class="mt-6 grid gap-6 lg:grid-cols-3" aria-label="Operational signals">
+<section class="mt-6 grid min-w-0 gap-6 lg:grid-cols-3" aria-label="Operational signals">
   <article class="rounded-xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
     <div class="flex flex-wrap items-start justify-between gap-2">
       <div>
@@ -481,16 +471,16 @@
     </div>
   </article>
 
-  <article class="rounded-xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+  <article class="min-w-0 overflow-hidden rounded-xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
     <div class="flex flex-wrap items-start justify-between gap-2">
-      <div>
+      <div class="min-w-0">
         <h2 class="flex items-center gap-2 text-lg font-bold text-zinc-900 dark:text-slate-100">
           <Receipt class="h-4 w-4 text-leah-700" aria-hidden="true" />
           Recent expenses
         </h2>
         <p class="text-sm text-zinc-500 dark:text-slate-400">
           {expensesCount} posting{expensesCount === 1 ? '' : 's'} · {currency(expenseTotal)} this period ·
-          <span class="font-semibold text-zinc-700 dark:text-slate-300">{currency(expenseSpark30d.total)}</span>
+          <span class="font-semibold text-zinc-700 dark:text-slate-300">{currency(expenseLast30dTotal)}</span>
           last 30 days
         </p>
       </div>
@@ -502,32 +492,17 @@
         All
       </button>
     </div>
-    <div
-      class="mt-3 flex h-16 gap-0.5 rounded-lg border border-zinc-100 bg-zinc-50/80 p-1 dark:border-slate-800 dark:bg-slate-800/40"
-      role="img"
-      aria-label="Expense amounts per day over the last 30 days"
-    >
-      {#each expenseSpark30d.bars as b}
-        <div class="flex min-w-0 flex-1 flex-col justify-end">
-          <div
-            class="min-h-[2px] w-full rounded-sm bg-rose-400 dark:bg-rose-500"
-            style="height: {Math.max(4, b.pct)}%"
-            title="{b.day}: {currency(b.amt)}"
-          ></div>
-        </div>
-      {/each}
-    </div>
-    <ul class="mt-3 grid gap-2">
+    <ul class="mt-3 grid min-w-0 gap-2">
       {#each recentExpenses as e}
-        <li>
+        <li class="min-w-0">
           <button
             type="button"
-            class="flex w-full items-center justify-between gap-2 rounded-lg border border-zinc-100 bg-zinc-50/80 px-3 py-2 text-left transition hover:border-leah-200 hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-leah-700/30 dark:border-slate-800 dark:bg-slate-800/40 dark:hover:bg-slate-800"
+            class="grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-lg border border-zinc-100 bg-zinc-50/80 px-3 py-2 text-left transition hover:border-leah-200 hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-leah-700/30 dark:border-slate-800 dark:bg-slate-800/40 dark:hover:bg-slate-800"
             onclick={() => onOpenExpense(e.id)}
           >
-            <span class="min-w-0">
+            <span class="min-w-0 overflow-hidden">
               <span class="block truncate text-sm font-semibold text-zinc-900 dark:text-slate-100">{e.vendor}</span>
-              <span class="block text-[11px] text-zinc-500 dark:text-slate-400">{e.type} · {e.date}</span>
+              <span class="block truncate text-[11px] text-zinc-500 dark:text-slate-400">{e.type} · {e.date}</span>
             </span>
             <span class="shrink-0 text-right tabular-nums">
               <span class="block text-sm font-bold text-zinc-900 dark:text-slate-100">{currency(e.amount)}</span>

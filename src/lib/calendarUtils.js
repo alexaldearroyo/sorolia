@@ -133,3 +133,48 @@ export function isoKeyFromDate(d) {
 export function countEventsBetween(events, startKey, endKey) {
   return events.filter((e) => e.dayKey >= startKey && e.dayKey <= endKey).length;
 }
+
+/**
+ * @typedef {{ id: string, name: string, customerId: string, status?: string, startKey: string, endKey: string }} ProjectTimelineSpan
+ */
+
+/**
+ * Pre-parsed project delivery windows for O(1)-per-day lookups (no per-day event explosion).
+ * @param {Array<{ id: string, name: string, customerId: string, status?: string, startDate?: string, endDate?: string }>} projects
+ * @returns {ProjectTimelineSpan[]}
+ */
+export function buildProjectTimelineIndex(projects) {
+  /** @type {ProjectTimelineSpan[]} */
+  const out = [];
+  for (const p of projects) {
+    const startKey = deDateToIso(p.startDate);
+    const endKey = deDateToIso(p.endDate);
+    if (!startKey || !endKey || startKey > endKey) continue;
+    out.push({
+      id: p.id,
+      name: p.name,
+      customerId: p.customerId,
+      status: p.status,
+      startKey,
+      endKey
+    });
+  }
+  return out;
+}
+
+/** @param {ProjectTimelineSpan[]} index */
+export function projectsActiveOnDay(index, isoKey) {
+  return index.filter((p) => isoKey >= p.startKey && isoKey <= p.endKey);
+}
+
+/**
+ * @param {ProjectTimelineSpan} span
+ * @param {string} isoKey
+ * @returns {'start' | 'end' | 'single' | null}
+ */
+export function timelineMarker(span, isoKey) {
+  if (span.startKey === isoKey && span.endKey === isoKey) return 'single';
+  if (span.startKey === isoKey) return 'start';
+  if (span.endKey === isoKey) return 'end';
+  return null;
+}

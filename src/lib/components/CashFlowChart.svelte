@@ -61,14 +61,15 @@
   const axisLabel = $derived(layout === 'stacked' ? `0–${yMax} stacked` : '0–100 per series');
 </script>
 
-<div class="rounded-xl border border-zinc-100 bg-gradient-to-b from-zinc-50/80 to-white p-3">
+<div class="overflow-hidden rounded-xl border border-zinc-100 bg-zinc-50/80 p-3 dark:border-slate-800 dark:bg-slate-800/40">
   <div class="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-100 pb-2">
     <p class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Rhythm · {periodLabel}</p>
     <span class="text-[10px] font-medium text-zinc-400">{axisLabel} · demo</span>
   </div>
   <svg
-    class="mt-2 w-full max-w-full text-zinc-900"
+    class="mt-2 block h-auto w-full max-w-full text-zinc-900 dark:text-slate-100"
     viewBox={`0 0 ${W} ${H}`}
+    preserveAspectRatio="xMidYMid meet"
     role="img"
     aria-label="Cash flow composition and net pulse"
   >
