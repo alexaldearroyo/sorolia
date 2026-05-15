@@ -11,6 +11,9 @@
   import { customerName } from '../workspaceActions.js';
   import EmptyState from '../components/EmptyState.svelte';
   import InventoryFormModal from '../components/InventoryFormModal.svelte';
+  import InfoBox from '../components/InfoBox.svelte';
+  import Truck from 'lucide-svelte/icons/truck';
+  import RefreshCw from 'lucide-svelte/icons/refresh-cw';
 
   let {
     inventoryEditor = $bindable(null),
@@ -23,6 +26,8 @@
     canDelete = false,
     onAdjustQty,
     onSetQty,
+    onFillUp = () => {},
+    onSetReorder = () => {},
     onUpsertInventoryRow,
     onDeleteInventoryRow,
     onOpenSupplier
@@ -141,7 +146,7 @@
   class="overflow-hidden rounded-3xl border border-zinc-200/80 bg-gradient-to-br from-leah-900 via-leah-800 to-leah-900 p-4 shadow-lg sm:p-6 dark:border-slate-700 dark:from-slate-900 dark:via-slate-900 dark:to-slate-950"
   aria-label="Inventory checkout"
 >
-  <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+  <div class="flex flex-col gap-4">
     <div class="flex flex-col gap-4">
       <div class="flex flex-wrap items-center gap-3">
         <span class="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-white/80">
@@ -236,6 +241,12 @@
                       {customerName(customers, row.supplierCustomerId)}
                     </p>
                   {/if}
+                  {#if (row.orderedQty ?? 0) > 0}
+                    <p class="mt-1 inline-flex items-center gap-1 self-start rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-sky-900">
+                      <Truck class="h-3 w-3" aria-hidden="true" />
+                      Ordered {row.orderedQty}{row.orderEta ? ` · ${row.orderEta}` : ''}
+                    </p>
+                  {/if}
                   <div class="mt-2 flex items-end justify-between">
                     <div>
                       <p class="text-[10px] font-bold uppercase tracking-wide text-zinc-400">On hand</p>
@@ -253,50 +264,75 @@
               </button>
 
               {#if canAdjust || canDelete || row.supplierCustomerId}
-                <div class="flex items-stretch gap-1 border-t border-zinc-100 bg-zinc-50/80 p-1.5">
+                <div class="flex flex-col gap-1 border-t border-zinc-100 bg-zinc-50/80 p-1.5">
                   {#if canAdjust}
-                    <button
-                      type="button"
-                      class="flex-1 rounded-xl bg-rose-100 px-2 py-2 text-base font-black text-rose-700 transition hover:bg-rose-200 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
-                      onclick={() => onAdjustQty?.(row.id, -1)}
-                      disabled={row.qty <= 0}
-                      aria-label="Decrease {row.code} by one"
-                      title="−1"
-                    >
-                      −
-                    </button>
-                    <button
-                      type="button"
-                      class="flex-1 rounded-xl bg-emerald-100 px-2 py-2 text-base font-black text-emerald-700 transition hover:bg-emerald-200 active:scale-95"
-                      onclick={() => onAdjustQty?.(row.id, 1)}
-                      aria-label="Increase {row.code} by one"
-                      title="+1"
-                    >
-                      +
-                    </button>
+                    <div class="flex items-stretch gap-1">
+                      <button
+                        type="button"
+                        class="flex-1 rounded-xl bg-rose-100 px-2 py-2 text-base font-black text-rose-700 transition hover:bg-rose-200 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+                        onclick={() => onAdjustQty?.(row.id, -1)}
+                        disabled={row.qty <= 0}
+                        aria-label="Decrease {row.code} by one"
+                        title="−1"
+                      >
+                        −
+                      </button>
+                      <button
+                        type="button"
+                        class="flex-1 rounded-xl bg-emerald-100 px-2 py-2 text-base font-black text-emerald-700 transition hover:bg-emerald-200 active:scale-95"
+                        onclick={() => onAdjustQty?.(row.id, 1)}
+                        aria-label="Increase {row.code} by one"
+                        title="+1"
+                      >
+                        +
+                      </button>
+                      <button
+                        type="button"
+                        class="inline-flex items-center gap-1 rounded-xl bg-leah-100 px-2 text-xs font-bold text-leah-900 transition hover:bg-leah-200"
+                        onclick={() => onFillUp?.(row.id)}
+                        title="Refill to 2× reorder point"
+                        aria-label="Fill up {row.code}"
+                      >
+                        <RefreshCw class="h-3.5 w-3.5" aria-hidden="true" />
+                        Fill
+                      </button>
+                    </div>
+                    <label class="flex items-center justify-between gap-2 px-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+                      Warning trigger
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={row.reorder}
+                        onchange={(e) => onSetReorder?.(row.id, e.currentTarget.value)}
+                        class="w-16 rounded-md border border-zinc-200 bg-white px-2 py-0.5 text-right text-xs tabular-nums text-zinc-800"
+                      />
+                    </label>
                   {/if}
-                  {#if row.supplierCustomerId}
-                    <button
-                      type="button"
-                      class="rounded-xl border border-zinc-200 bg-white px-2 text-zinc-600 transition hover:border-leah-300 hover:text-leah-800"
-                      onclick={() => onOpenSupplier?.(row.supplierCustomerId)}
-                      aria-label="Open supplier"
-                      title="Supplier"
-                    >
-                      <Users class="h-4 w-4" aria-hidden="true" />
-                    </button>
-                  {/if}
-                  {#if canDelete}
-                    <button
-                      type="button"
-                      class="rounded-xl border border-rose-200 bg-white px-2 text-rose-700 transition hover:bg-rose-50"
-                      onclick={() => onDeleteInventoryRow?.(row.id)}
-                      aria-label="Delete {row.code}"
-                      title="Delete"
-                    >
-                      <Trash2 class="h-4 w-4" aria-hidden="true" />
-                    </button>
-                  {/if}
+                  <div class="flex items-stretch gap-1">
+                    {#if row.supplierCustomerId}
+                      <button
+                        type="button"
+                        class="flex-1 rounded-xl border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-600 transition hover:border-leah-300 hover:text-leah-800"
+                        onclick={() => onOpenSupplier?.(row.supplierCustomerId)}
+                        aria-label="Open supplier"
+                        title="Supplier"
+                      >
+                        <Users class="mx-auto h-4 w-4" aria-hidden="true" />
+                      </button>
+                    {/if}
+                    {#if canDelete}
+                      <button
+                        type="button"
+                        class="rounded-xl border border-rose-200 bg-white px-2 py-1 text-rose-700 transition hover:bg-rose-50"
+                        onclick={() => onDeleteInventoryRow?.(row.id)}
+                        aria-label="Delete {row.code}"
+                        title="Delete"
+                      >
+                        <Trash2 class="h-4 w-4" aria-hidden="true" />
+                      </button>
+                    {/if}
+                  </div>
                 </div>
               {/if}
             </article>
@@ -305,72 +341,17 @@
       {/if}
     </div>
 
-    <aside class="flex flex-col gap-3 rounded-2xl bg-white/95 p-4 shadow-inner dark:bg-slate-100/95">
-      <header class="flex items-center gap-2">
-        <ShoppingBasket class="h-5 w-5 text-leah-900" aria-hidden="true" />
-        <h2 class="text-sm font-extrabold uppercase tracking-[0.2em] text-leah-900">Stockroom register</h2>
-      </header>
-
-      <div class="grid grid-cols-2 gap-2">
-        <div class="rounded-xl bg-leah-900 p-3 text-white shadow">
-          <p class="text-[10px] font-bold uppercase tracking-wider text-white/70">Total units</p>
-          <p class="mt-1 text-2xl font-black tabular-nums">{totalUnits}</p>
-        </div>
-        <div class="rounded-xl bg-emerald-500 p-3 text-white shadow">
-          <p class="text-[10px] font-bold uppercase tracking-wider text-white/80">Stock value</p>
-          <p class="mt-1 text-2xl font-black tabular-nums">{euro.format(totalValue)}</p>
-        </div>
-        <div class="rounded-xl {outItems.length ? 'bg-rose-600 text-white' : 'bg-zinc-100 text-zinc-700'} p-3 shadow">
-          <p class="text-[10px] font-bold uppercase tracking-wider opacity-80">Out</p>
-          <p class="mt-1 text-2xl font-black tabular-nums">{outItems.length}</p>
-        </div>
-        <div class="rounded-xl {lowItems.length ? 'bg-amber-500 text-white' : 'bg-zinc-100 text-zinc-700'} p-3 shadow">
-          <p class="text-[10px] font-bold uppercase tracking-wider opacity-80">Low</p>
-          <p class="mt-1 text-2xl font-black tabular-nums">{lowItems.length}</p>
-        </div>
-      </div>
-
-      {#if lowItems.length}
-        <div class="rounded-xl border border-zinc-200 bg-white">
-          <p class="border-b border-zinc-100 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">Restock list</p>
-          <ul class="max-h-60 divide-y divide-zinc-100 overflow-y-auto text-sm">
-            {#each lowItems as row}
-              {@const state = stockState(row)}
-              <li>
-                <button
-                  type="button"
-                  class="flex w-full items-center justify-between gap-2 px-3 py-2 text-left hover:bg-zinc-50"
-                  onclick={() => openRow(row.id)}
-                  disabled={!canWrite}
-                >
-                  <span class="flex min-w-0 items-center gap-2">
-                    <AlertTriangle class="h-3.5 w-3.5 shrink-0 {state === 'out' ? 'text-rose-600' : 'text-amber-600'}" aria-hidden="true" />
-                    <span class="min-w-0 flex-1 truncate font-semibold text-zinc-800">{row.name}</span>
-                  </span>
-                  <span class="shrink-0 font-mono tabular-nums text-xs {state === 'out' ? 'text-rose-700' : 'text-amber-700'}">
-                    {row.qty}/{row.reorder}
-                  </span>
-                </button>
-              </li>
-            {/each}
-          </ul>
-        </div>
-      {/if}
-
-      {#if canWrite}
+    {#if canWrite}
+      <div class="flex justify-end">
         <button
           type="button"
-          class="mt-1 inline-flex items-center justify-center gap-2 rounded-2xl bg-amber-400 px-4 py-3 text-sm font-extrabold uppercase tracking-wider text-leah-950 shadow-md transition hover:bg-amber-300 active:scale-[0.98]"
+          class="inline-flex items-center justify-center gap-2 rounded-2xl bg-amber-400 px-5 py-3 text-sm font-extrabold uppercase tracking-wider text-leah-950 shadow-md transition hover:bg-amber-300 active:scale-[0.98]"
           onclick={() => (inventoryEditor = { mode: 'create' })}
         >
           <Plus class="h-4 w-4" aria-hidden="true" />
           Add SKU
         </button>
-      {/if}
-
-      <p class="mt-auto text-[10px] leading-relaxed text-zinc-500">
-        Tap any tile to edit. <span class="font-bold">±</span> buttons adjust on-hand stock by one. Restock list highlights anything at or below reorder point.
-      </p>
-    </aside>
+      </div>
+    {/if}
   </div>
 </section>

@@ -1,21 +1,34 @@
 <script>
   import X from 'lucide-svelte/icons/x';
   import Trash2 from 'lucide-svelte/icons/trash-2';
-  import { deDateToIso, isoDateToDe } from '../workspaceActions.js';
+  import Plus from 'lucide-svelte/icons/plus';
+  import { deDateToIso, isoDateToDe, expenseAmount } from '../workspaceActions.js';
   import { useEscape } from '../escape.js';
   import { lockDialogFocus } from '../dialogFocus.js';
+  import InfoBox from './InfoBox.svelte';
 
-  let { editor, draftRow, customers, locale = 'en-GB', onClose, onSave, onDelete } = $props();
+  let {
+    editor,
+    draftRow,
+    customers,
+    inventory = [],
+    onClose,
+    onSave,
+    onDelete
+  } = $props();
 
   let vendor = $state('');
   let type = $state('General');
-  let amount = $state('');
   let dateIso = $state('');
   let supplierId = $state('');
+  let items = $state(/** @type {Array<{description:string, amount:string, qty:string}>} */ ([{ description: '', amount: '', qty: '' }]));
+  let isOrder = $state(false);
+  let inventoryId = $state('');
+  let orderEta = $state('');
 
   let errors = $state({ vendor: '', amount: '', date: '', general: '' });
 
-  const types = ['General', 'Software', 'Infrastructure', 'Travel', 'Legal', 'Fixed'];
+  const types = ['General', 'Software', 'Infrastructure', 'Travel', 'Legal', 'Fixed', 'Goods'];
 
   function clearErrors() {
     errors = { vendor: '', amount: '', date: '', general: '' };
@@ -31,15 +44,28 @@
     if (editor.mode === 'create') {
       vendor = '';
       type = 'General';
-      amount = '';
       dateIso = todayIso();
       supplierId = '';
+      isOrder = false;
+      inventoryId = '';
+      orderEta = '';
+      items = [{ description: '', amount: '', qty: '' }];
     } else if (draftRow) {
       vendor = draftRow.vendor;
       type = draftRow.type;
-      amount = String(draftRow.amount);
       dateIso = deDateToIso(draftRow.date) || todayIso();
       supplierId = draftRow.supplierCustomerId ?? '';
+      isOrder = Boolean(draftRow.isOrder);
+      inventoryId = draftRow.inventoryId ?? '';
+      orderEta = draftRow.orderEta ?? '';
+      const seedItems = Array.isArray(draftRow.items) && draftRow.items.length
+        ? draftRow.items.map((it) => ({
+            description: String(it.description ?? ''),
+            amount: String(it.amount ?? 0),
+            qty: String(it.qty ?? '')
+          }))
+        : [{ description: 'Total', amount: String(draftRow.amount ?? ''), qty: '' }];
+      items = seedItems;
     }
   }
 
@@ -63,6 +89,18 @@
     return lockDialogFocus(() => dialogEl);
   });
 
+  function addLine() {
+    items = [...items, { description: '', amount: '', qty: '' }];
+  }
+  function removeLine(idx) {
+    items = items.length > 1 ? items.filter((_, i) => i !== idx) : items;
+  }
+  function updateLine(idx, patch) {
+    items = items.map((it, i) => (i === idx ? { ...it, ...patch } : it));
+  }
+
+  const total = $derived(items.reduce((s, it) => s + (Number(it.amount) || 0), 0));
+
   function validate() {
     clearErrors();
     let ok = true;
@@ -70,9 +108,8 @@
       errors.vendor = 'Vendor is required.';
       ok = false;
     }
-    const n = Number(amount);
-    if (!String(amount).trim() || Number.isNaN(n) || n <= 0) {
-      errors.amount = 'Enter an amount greater than zero.';
+    if (total <= 0) {
+      errors.amount = 'Add at least one line with an amount.';
       ok = false;
     }
     if (!dateIso) {
@@ -89,9 +126,20 @@
       id: editor.mode === 'edit' && draftRow ? draftRow.id : undefined,
       vendor: vendor.trim(),
       type,
-      amount: Math.round(Number(amount)),
+      amount: Math.round(total),
+      items: items
+        .filter((it) => (it.description ?? '').toString().trim() || Number(it.amount))
+        .map((it) => ({
+          description: String(it.description ?? '').trim() || 'Line',
+          amount: Math.round(Number(it.amount) || 0),
+          qty: Math.max(0, Math.round(Number(it.qty) || 0))
+        })),
       date: dateDe,
-      supplierCustomerId: supplierId || null
+      supplierCustomerId: supplierId || null,
+      isOrder,
+      inventoryId: isOrder ? inventoryId || null : null,
+      orderEta: isOrder ? orderEta : '',
+      orderStatus: isOrder ? draftRow?.orderStatus || 'ordered' : ''
     });
   }
 
@@ -104,6 +152,8 @@
   const title = $derived(
     editor?.mode === 'create' ? 'New expense' : draftRow ? `Edit ${draftRow.vendor}` : 'Edit expense'
   );
+
+  const linkedSku = $derived(inventory.find((s) => s.id === inventoryId) ?? null);
 </script>
 
 {#if open}
@@ -119,76 +169,177 @@
       role="dialog"
       aria-modal="true"
       aria-labelledby="expense-form-title"
-      class="relative z-10 w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl"
+      class="relative z-10 flex max-h-[90vh] w-full max-w-2xl flex-col rounded-2xl border border-zinc-200 bg-white shadow-2xl"
     >
-      <div class="flex items-start justify-between gap-3">
+      <header class="flex items-start justify-between gap-3 border-b border-zinc-100 px-6 py-4">
         <h2 id="expense-form-title" class="text-lg font-bold text-zinc-900">{title}</h2>
         <button type="button" class="rounded-lg p-2 text-zinc-500 hover:bg-zinc-100" onclick={onClose} aria-label="Close">
           <X class="h-5 w-5" aria-hidden="true" />
         </button>
-      </div>
-      {#if errors.general}
-        <p class="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-900">{errors.general}</p>
-      {/if}
+      </header>
 
-      <div class="mt-5 grid gap-4">
-        <label class="grid gap-1.5 text-sm font-semibold text-zinc-700">
-          Vendor
-          <input
-            bind:value={vendor}
-            class="rounded-lg border bg-white px-3 py-2 text-sm {errors.vendor ? 'border-rose-500' : 'border-zinc-200'}"
-          />
-          {#if errors.vendor}
-            <span class="text-xs font-medium text-rose-700">{errors.vendor}</span>
-          {/if}
-        </label>
-        <label class="grid gap-1.5 text-sm font-semibold text-zinc-700">
-          Amount (EUR)
-          <input
-            bind:value={amount}
-            type="number"
-            min="1"
-            step="1"
-            class="rounded-lg border bg-white px-3 py-2 text-sm tabular-nums {errors.amount
-              ? 'border-rose-500'
-              : 'border-zinc-200'}"
-          />
+      <div class="flex-1 overflow-y-auto px-6 py-5">
+        {#if errors.general}
+          <p class="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-900">{errors.general}</p>
+        {/if}
+
+        <div class="grid gap-4 sm:grid-cols-2">
+          <label class="grid gap-1.5 text-sm font-semibold text-zinc-700 sm:col-span-2">
+            Vendor
+            <input
+              bind:value={vendor}
+              class="rounded-lg border bg-white px-3 py-2 text-sm {errors.vendor ? 'border-rose-500' : 'border-zinc-200'}"
+            />
+            {#if errors.vendor}
+              <span class="text-xs font-medium text-rose-700">{errors.vendor}</span>
+            {/if}
+          </label>
+          <label class="grid gap-1.5 text-sm font-semibold text-zinc-700">
+            Posting date
+            <input
+              bind:value={dateIso}
+              type="date"
+              class="rounded-lg border bg-white px-3 py-2 text-sm {errors.date ? 'border-rose-500' : 'border-zinc-200'}"
+            />
+            {#if errors.date}
+              <span class="text-xs font-medium text-rose-700">{errors.date}</span>
+            {/if}
+          </label>
+          <label class="grid gap-1.5 text-sm font-semibold text-zinc-700">
+            Type
+            <select bind:value={type} class="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm">
+              {#each types as t}
+                <option value={t}>{t}</option>
+              {/each}
+            </select>
+          </label>
+          <label class="grid gap-1.5 text-sm font-semibold text-zinc-700 sm:col-span-2">
+            Supplier (optional)
+            <select bind:value={supplierId} class="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm">
+              <option value="">— none —</option>
+              {#each customers as c}
+                <option value={c.id}>{c.name}</option>
+              {/each}
+            </select>
+          </label>
+        </div>
+
+        <fieldset class="mt-6 grid gap-2">
+          <legend class="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-zinc-500">
+            Lines
+            <InfoBox helpKey="expense.lines" />
+          </legend>
           {#if errors.amount}
-            <span class="text-xs font-medium text-rose-700">{errors.amount}</span>
+            <p class="text-xs font-medium text-rose-700">{errors.amount}</p>
           {/if}
-        </label>
-        <label class="grid gap-1.5 text-sm font-semibold text-zinc-700">
-          Posting date
-          <input
-            bind:value={dateIso}
-            type="date"
-            lang={locale}
-            class="rounded-lg border bg-white px-3 py-2 text-sm {errors.date ? 'border-rose-500' : 'border-zinc-200'}"
-          />
-          {#if errors.date}
-            <span class="text-xs font-medium text-rose-700">{errors.date}</span>
+          <div class="overflow-x-auto rounded-lg border border-zinc-200">
+            <table class="w-full min-w-[480px] text-left text-sm">
+              <thead>
+                <tr class="bg-zinc-50 text-[11px] font-bold uppercase tracking-wide text-zinc-500">
+                  <th class="px-3 py-2" scope="col">Description</th>
+                  <th class="px-3 py-2 text-right" scope="col">Qty</th>
+                  <th class="px-3 py-2 text-right" scope="col">Amount (€)</th>
+                  <th class="px-3 py-2" scope="col"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {#each items as item, idx}
+                  <tr class="border-t border-zinc-100">
+                    <td class="px-3 py-2">
+                      <input
+                        value={item.description}
+                        oninput={(e) => updateLine(idx, { description: e.currentTarget.value })}
+                        placeholder="What was purchased"
+                        class="w-full rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-sm"
+                      />
+                    </td>
+                    <td class="px-3 py-2 text-right">
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={item.qty}
+                        oninput={(e) => updateLine(idx, { qty: e.currentTarget.value })}
+                        class="w-20 rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-right text-sm tabular-nums"
+                      />
+                    </td>
+                    <td class="px-3 py-2 text-right">
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={item.amount}
+                        oninput={(e) => updateLine(idx, { amount: e.currentTarget.value })}
+                        class="w-28 rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-right text-sm tabular-nums"
+                      />
+                    </td>
+                    <td class="px-3 py-2 text-right">
+                      <button
+                        type="button"
+                        class="rounded-md border border-zinc-200 p-1.5 text-zinc-500 hover:bg-zinc-50 disabled:opacity-30"
+                        onclick={() => removeLine(idx)}
+                        disabled={items.length <= 1}
+                        aria-label="Remove line"
+                      >
+                        <Trash2 class="h-3.5 w-3.5" aria-hidden="true" />
+                      </button>
+                    </td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          </div>
+          <button
+            type="button"
+            class="inline-flex w-fit items-center gap-1.5 rounded-md border border-dashed border-zinc-300 px-3 py-1.5 text-xs font-semibold text-leah-900 hover:bg-zinc-50"
+            onclick={addLine}
+          >
+            <Plus class="h-3.5 w-3.5" aria-hidden="true" /> Add line
+          </button>
+        </fieldset>
+
+        <div class="mt-6 rounded-lg border border-zinc-200 bg-zinc-50/60 p-4">
+          <label class="flex items-center gap-2 text-sm font-semibold text-zinc-800">
+            <input type="checkbox" bind:checked={isOrder} class="h-4 w-4" />
+            This expense is a purchase order (goods on the way)
+            <InfoBox helpKey="expense.order" />
+          </label>
+          {#if isOrder}
+            <div class="mt-3 grid gap-3 sm:grid-cols-2">
+              <label class="grid gap-1.5 text-xs font-semibold text-zinc-700">
+                SKU to receive
+                <select
+                  bind:value={inventoryId}
+                  class="rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-sm"
+                >
+                  <option value="">— none —</option>
+                  {#each inventory as sku}
+                    <option value={sku.id}>{sku.code} · {sku.name}</option>
+                  {/each}
+                </select>
+                {#if linkedSku}
+                  <span class="text-[11px] text-zinc-500">On hand {linkedSku.qty} · ordered {linkedSku.orderedQty ?? 0}</span>
+                {/if}
+              </label>
+              <label class="grid gap-1.5 text-xs font-semibold text-zinc-700">
+                ETA (optional)
+                <input
+                  type="date"
+                  bind:value={orderEta}
+                  class="rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-sm"
+                />
+              </label>
+            </div>
           {/if}
-        </label>
-        <label class="grid gap-1.5 text-sm font-semibold text-zinc-700">
-          Type
-          <select bind:value={type} class="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm">
-            {#each types as t}
-              <option value={t}>{t}</option>
-            {/each}
-          </select>
-        </label>
-        <label class="grid gap-1.5 text-sm font-semibold text-zinc-700">
-          Supplier (optional)
-          <select bind:value={supplierId} class="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm">
-            <option value="">— none —</option>
-            {#each customers as c}
-              <option value={c.id}>{c.name}</option>
-            {/each}
-          </select>
-        </label>
+        </div>
+
+        <p class="mt-5 flex items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50/60 px-4 py-2 text-sm">
+          <span class="text-zinc-500">Total</span>
+          <span class="font-extrabold tabular-nums text-zinc-900">€ {total.toLocaleString('de-DE')}</span>
+        </p>
       </div>
 
-      <div class="mt-6 flex flex-wrap items-center justify-between gap-3">
+      <footer class="flex flex-wrap items-center justify-between gap-3 border-t border-zinc-100 px-6 py-4">
         {#if editor?.mode === 'edit'}
           <button
             type="button"
@@ -217,7 +368,7 @@
             {editor?.mode === 'create' ? 'Save expense' : 'Update'}
           </button>
         </div>
-      </div>
+      </footer>
     </div>
   </div>
 {/if}

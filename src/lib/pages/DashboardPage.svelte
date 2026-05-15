@@ -8,6 +8,7 @@
   import Receipt from 'lucide-svelte/icons/receipt';
   import AlertTriangle from 'lucide-svelte/icons/alert-triangle';
   import { statusBadgeClass, dueTag, dueTagClass, healthBadgeClass, parseDeDate } from '../format.js';
+  import InfoBox from '../components/InfoBox.svelte';
   import CashFlowChart from '../components/CashFlowChart.svelte';
 
   let {
@@ -171,7 +172,10 @@
   </article>
 
   <article class="rounded-xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-    <p class="text-[11px] font-bold uppercase tracking-wide text-zinc-500 dark:text-slate-400">OpEx · this period</p>
+    <p class="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-zinc-500 dark:text-slate-400">
+      Operating costs · this period
+      <InfoBox helpKey="dashboard.opex" />
+    </p>
     <strong class="mt-1 block text-3xl font-extrabold tracking-tight text-zinc-900 dark:text-slate-100">{currency(expenseTotal)}</strong>
     <p class="mt-1 text-xs text-zinc-500 dark:text-slate-400">{expensesCount} posting{expensesCount === 1 ? '' : 's'} · CSV export ready</p>
   </article>
@@ -189,7 +193,10 @@
     >
       <Users class="h-4 w-4 shrink-0 text-leah-800 dark:text-leah-700" aria-hidden="true" />
       <div class="min-w-0">
-        <p class="text-[10px] font-bold uppercase tracking-wide text-zinc-500 dark:text-slate-400">At-risk</p>
+        <p class="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-zinc-500 dark:text-slate-400">
+          At-risk
+          <InfoBox helpKey="dashboard.atrisk" />
+        </p>
         <p class="text-base font-extrabold text-zinc-900 dark:text-slate-100">{atRiskCustomers}<span class="ml-1 text-[10px] font-semibold text-zinc-500 dark:text-slate-400">customers</span></p>
       </div>
     </button>

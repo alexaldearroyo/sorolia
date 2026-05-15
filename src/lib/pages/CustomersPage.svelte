@@ -19,6 +19,8 @@
     canWrite = false,
     canDelete = false,
     canExport = false,
+    /** 'customer' (default) shows customer + both; 'supplier' shows supplier + both. */
+    kindFilter = 'customer',
     onUpsertCustomer,
     onDeleteCustomer,
     onOpenCustomerDetail,
@@ -27,6 +29,9 @@
     onOpenInventory,
     onExportCsv
   } = $props();
+
+  const noun = $derived(kindFilter === 'supplier' ? 'supplier' : 'customer');
+  const Noun = $derived(kindFilter === 'supplier' ? 'Supplier' : 'Customer');
 
   let query = $state('');
   let healthFilter = $state('All');
@@ -95,9 +100,16 @@
     }
   }
 
+  function matchesKind(c) {
+    const k = c.kind ?? 'customer';
+    if (kindFilter === 'supplier') return k === 'supplier' || k === 'both';
+    return k === 'customer' || k === 'both' || !c.kind;
+  }
+
   const filtered = $derived.by(() => {
     const q = query.trim().toLowerCase();
     return customers.filter((c) => {
+      if (!matchesKind(c)) return false;
       if (healthFilter !== 'All' && c.health !== healthFilter) return false;
       if (!q) return true;
       return (
@@ -115,6 +127,7 @@
   editor={customerEditor}
   draftRow={customerDraft}
   {canDelete}
+  defaultKind={kindFilter}
   onClose={closeEditor}
   onSave={saveCustomer}
   onDelete={deleteCustomer}
@@ -127,7 +140,7 @@
       <input
         bind:value={query}
         type="search"
-        placeholder="Filter customers…"
+        placeholder={`Filter ${noun}s…`}
         class="w-full rounded-lg border border-zinc-200 bg-white py-2 pl-9 pr-3 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
       />
     </div>
@@ -162,10 +175,10 @@
   {#if filtered.length === 0}
     <div class="mt-6">
       <EmptyState
-        icon="🤝"
-        title="No customers match this filter"
-        body="Adjust the search or health filter, or add the first account."
-        action={canWrite ? { label: 'New customer', onClick: () => (customerEditor = { mode: 'create' }), icon: '＋' } : null}
+        icon={kindFilter === 'supplier' ? '🚚' : '🤝'}
+        title={`No ${noun}s match this filter`}
+        body="Adjust the search or health filter, or add the first record."
+        action={canWrite ? { label: `New ${noun}`, onClick: () => (customerEditor = { mode: 'create' }), icon: '＋' } : null}
       />
     </div>
   {:else}

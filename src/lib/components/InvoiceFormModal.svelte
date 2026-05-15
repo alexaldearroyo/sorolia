@@ -3,18 +3,20 @@
   import Trash2 from 'lucide-svelte/icons/trash-2';
   import Plus from 'lucide-svelte/icons/plus';
   import Eye from 'lucide-svelte/icons/eye';
+  import UserPlus from 'lucide-svelte/icons/user-plus';
   import { deDateToIso, isoDateToDe, expectedDueFromTerms } from '../workspaceActions.js';
   import { useEscape } from '../escape.js';
   import { lockDialogFocus } from '../dialogFocus.js';
   import { summarizeLines, emptyLineItem } from '../invoiceMath.js';
   import { formatMoney } from '../fx.js';
+  import InfoBox from './InfoBox.svelte';
 
   let {
     editor,
     draftRow,
     customers,
+    inventory = [],
     settings = null,
-    locale = 'en-GB',
     canDelete = true,
     onClose,
     onCreate,
@@ -23,14 +25,24 @@
     onPreview
   } = $props();
 
+  /* Tax keys: simple 1–4 preset + custom (free-form number). The team uses
+     German Steuerschlüssel — 1=tax-free, 2=7%, 3=19%, 4=reverse charge. */
+  const TAX_KEY_PRESETS = ['1', '2', '3', '4'];
+
   let customerId = $state('');
+  let customerInlineName = $state('');
+  let customerInlineAddress = $state('');
+  let customerInlineVatId = $state('');
+  let customerInlineIsPrivate = $state(false);
+  let useInlineCustomer = $state(false);
+
   let dueIso = $state('');
-  let status = $state('Open');
+  let status = $state('Offer');
   let title = $state('');
   let notes = $state('');
-  let poRef = $state('');
-  let invoiceCurrency = $state('EUR');
   let amountPaid = $state(0);
+  let taxKey = $state('3');
+  let taxKeyCustom = $state('');
   let items = $state([emptyLineItem()]);
 
   let errors = $state({ customerId: '', items: '', due: '', general: '' });
@@ -57,16 +69,20 @@
   function syncFromEditor() {
     clearErrors();
     if (!editor) return;
+    useInlineCustomer = false;
+    customerInlineName = '';
+    customerInlineAddress = '';
+    customerInlineVatId = '';
+    customerInlineIsPrivate = false;
     if (editor.mode === 'create') {
       customerId = customers[0]?.id ?? '';
       status = 'Offer';
       title = '';
       dueIso = plusDaysIso(defaultTermsDays(customerId));
       notes = '';
-      poRef = '';
       amountPaid = 0;
-      const cust = customers.find((c) => c.id === customerId);
-      invoiceCurrency = cust?.currency ?? settings?.currency ?? 'EUR';
+      taxKey = String(settings?.defaultTaxKey ?? '3');
+      taxKeyCustom = '';
       items = [{ ...emptyLineItem(), vatRate: defaultVat() }];
     } else if (draftRow) {
       customerId = draftRow.customerId;
@@ -74,14 +90,21 @@
       title = draftRow.title ?? '';
       dueIso = deDateToIso(draftRow.due) || plusDaysIso(defaultTermsDays(draftRow.customerId));
       notes = draftRow.notes ?? '';
-      poRef = draftRow.poRef ?? '';
-      invoiceCurrency = draftRow.currency ?? 'EUR';
       amountPaid = Number(draftRow.amountPaid ?? 0);
+      const stored = String(draftRow.taxKey ?? '3');
+      if (TAX_KEY_PRESETS.includes(stored)) {
+        taxKey = stored;
+        taxKeyCustom = '';
+      } else {
+        taxKey = 'custom';
+        taxKeyCustom = stored;
+      }
       const seedItems = (draftRow.items ?? []).map((it) => ({
         description: it.description ?? '',
         qty: it.qty ?? 1,
         unitPrice: it.unitPrice ?? 0,
-        vatRate: it.vatRate ?? defaultVat()
+        vatRate: it.vatRate ?? defaultVat(),
+        skuId: it.skuId ?? ''
       }));
       items = seedItems.length ? seedItems : [{ ...emptyLineItem(), vatRate: defaultVat() }];
     }
@@ -110,7 +133,7 @@
   const totals = $derived(summarizeLines(items));
 
   function fmt(value) {
-    return formatMoney(value, invoiceCurrency, 'de-DE');
+    return formatMoney(value, 'EUR', 'de-DE');
   }
 
   function addLine() {
@@ -125,18 +148,33 @@
     items = items.map((it, i) => (i === idx ? { ...it, ...patch } : it));
   }
 
+  function onLineSkuChange(idx, skuId) {
+    const sku = inventory.find((s) => s.id === skuId);
+    const patch = { skuId };
+    if (sku && !items[idx]?.description?.trim()) {
+      patch.description = `${sku.code} · ${sku.name}`;
+    }
+    if (sku && (!items[idx]?.unitPrice || Number(items[idx].unitPrice) === 0)) {
+      patch.unitPrice = sku.unitCost ?? 0;
+    }
+    updateLine(idx, patch);
+  }
+
   function onCustomerChange() {
     if (editor?.mode !== 'create') return;
-    const cust = customers.find((c) => c.id === customerId);
-    if (cust?.currency) invoiceCurrency = cust.currency;
     dueIso = plusDaysIso(defaultTermsDays(customerId));
   }
 
   function validate() {
     clearErrors();
     let ok = true;
-    if (!customerId || !customers.some((c) => c.id === customerId)) {
-      errors.customerId = 'Choose a valid customer.';
+    if (useInlineCustomer) {
+      if (!customerInlineName.trim() || customerInlineName.trim().length < 2) {
+        errors.customerId = 'Type at least 2 characters for the new customer.';
+        ok = false;
+      }
+    } else if (!customerId || !customers.some((c) => c.id === customerId)) {
+      errors.customerId = 'Choose a customer or add a new one.';
       ok = false;
     }
     if (status !== 'Offer' && !dueIso) {
@@ -153,17 +191,39 @@
     return ok;
   }
 
+  function resolvedTaxKey() {
+    if (taxKey === 'custom') return taxKeyCustom.trim();
+    return taxKey;
+  }
+
+  function buildInlineCustomerPayload() {
+    if (!useInlineCustomer) return null;
+    return {
+      name: customerInlineName.trim(),
+      country: 'DE',
+      segment: 'New',
+      health: 'Good',
+      isPrivate: customerInlineIsPrivate,
+      kind: 'customer',
+      vatId: customerInlineIsPrivate ? '' : customerInlineVatId.trim(),
+      address: customerInlineAddress.trim(),
+      paymentTermsDays: Number(settings?.paymentTermsDays ?? 14),
+      currency: 'EUR'
+    };
+  }
+
   function buildPayload() {
     const dueDe = status === 'Offer' ? '' : isoDateToDe(dueIso);
     return {
-      customerId,
+      customerId: useInlineCustomer ? null : customerId,
+      inlineCustomer: buildInlineCustomerPayload(),
       status,
       title: title.trim(),
       dueDe,
       due: dueDe,
       notes: notes.trim(),
-      poRef: poRef.trim(),
-      currency: invoiceCurrency,
+      currency: 'EUR',
+      taxKey: resolvedTaxKey(),
       amountPaid: status === 'Partially paid' ? Number(amountPaid) || 0 : status === 'Paid' ? totals.gross : 0,
       items
     };
@@ -204,12 +264,11 @@
   const vatOptions = $derived(settings?.vatRates?.length ? settings.vatRates : [0, 7, 19]);
 
   const expectedDue = $derived(
-    customerId ? expectedDueFromTerms(customers.find((c) => c.id === customerId), settings) : ''
+    customerId && !useInlineCustomer
+      ? expectedDueFromTerms(customers.find((c) => c.id === customerId), settings)
+      : ''
   );
 
-  /* Issued invoices are immutable for tax / audit reasons. The UI should not
-     reach this state in normal use (the Edit button is hidden for non-offers),
-     but this gate is the safety net in case it does. */
   const isEditingIssued = $derived(
     editor?.mode === 'edit' && draftRow && draftRow.status !== 'Offer'
   );
@@ -234,7 +293,7 @@
         <div>
           <h2 id="invoice-form-title" class="text-lg font-bold text-zinc-900">{heading}</h2>
           <p class="mt-1 text-xs text-zinc-500">
-            {invoiceCurrency} · DD/MM/YYYY · default VAT {defaultVat()}% · totals computed from lines.
+            EUR · DD/MM/YYYY · default VAT {defaultVat()}% · totals computed from lines.
           </p>
         </div>
         <button
@@ -267,22 +326,78 @@
               class="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm"
             />
           </label>
-          <label class="grid gap-1.5 text-sm font-semibold text-zinc-700">
-            Customer
-            <select
-              bind:value={customerId}
-              onchange={onCustomerChange}
-              aria-invalid={errors.customerId ? 'true' : 'false'}
-              class="rounded-lg border bg-white px-3 py-2 text-sm {errors.customerId ? 'border-rose-500' : 'border-zinc-200'}"
-            >
-              {#each customers as c}
-                <option value={c.id}>{c.name}</option>
-              {/each}
-            </select>
-            {#if errors.customerId}
-              <span class="text-xs font-medium text-rose-700">{errors.customerId}</span>
+
+          <div class="grid gap-1.5 text-sm font-semibold text-zinc-700 sm:col-span-2">
+            <span class="flex items-center gap-1.5">
+              Customer
+              <InfoBox helpKey="invoice.customer.inline" />
+            </span>
+            {#if useInlineCustomer}
+              <div class="grid gap-2 rounded-lg border border-sky-200 bg-sky-50/60 p-3">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-xs font-bold uppercase tracking-wide text-sky-800">New customer</span>
+                  <button
+                    type="button"
+                    class="text-xs font-semibold text-sky-900 hover:underline"
+                    onclick={() => (useInlineCustomer = false)}
+                  >
+                    Use existing instead
+                  </button>
+                </div>
+                <input
+                  bind:value={customerInlineName}
+                  placeholder="Customer / company name"
+                  class="rounded-md border bg-white px-3 py-2 text-sm {errors.customerId ? 'border-rose-500' : 'border-zinc-200'}"
+                />
+                <label class="flex items-center gap-2 text-xs font-medium text-zinc-700">
+                  <input type="checkbox" bind:checked={customerInlineIsPrivate} class="h-3.5 w-3.5" />
+                  Private person (no VAT-ID required)
+                  <InfoBox helpKey="invoice.private" />
+                </label>
+                <input
+                  bind:value={customerInlineAddress}
+                  placeholder="Address (street, postcode, city)"
+                  class="rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm"
+                />
+                {#if !customerInlineIsPrivate}
+                  <input
+                    bind:value={customerInlineVatId}
+                    placeholder="VAT-ID (e.g. DE123456789)"
+                    class="rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm uppercase"
+                  />
+                {/if}
+                {#if errors.customerId}
+                  <span class="text-xs font-medium text-rose-700">{errors.customerId}</span>
+                {/if}
+              </div>
+            {:else}
+              <div class="flex gap-2">
+                <select
+                  bind:value={customerId}
+                  onchange={onCustomerChange}
+                  aria-invalid={errors.customerId ? 'true' : 'false'}
+                  class="flex-1 rounded-lg border bg-white px-3 py-2 text-sm {errors.customerId ? 'border-rose-500' : 'border-zinc-200'}"
+                >
+                  {#each customers as c}
+                    <option value={c.id}>{c.name}</option>
+                  {/each}
+                </select>
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-sky-300 bg-sky-50 px-3 py-2 text-xs font-semibold text-sky-900 hover:bg-sky-100"
+                  onclick={() => (useInlineCustomer = true)}
+                  title="Add a brand-new customer"
+                >
+                  <UserPlus class="h-3.5 w-3.5" aria-hidden="true" />
+                  New
+                </button>
+              </div>
+              {#if errors.customerId}
+                <span class="text-xs font-medium text-rose-700">{errors.customerId}</span>
+              {/if}
             {/if}
-          </label>
+          </div>
+
           <label class="grid gap-1.5 text-sm font-semibold text-zinc-700">
             Status
             <select bind:value={status} class="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm">
@@ -290,13 +405,12 @@
               <option>Open</option>
               <option>Partially paid</option>
               <option>Paid</option>
-              <option>Overdue</option>
             </select>
             <span class="text-[11px] text-zinc-500">
               {#if status === 'Offer'}
                 An offer has no due date yet — set one once you issue it.
               {:else}
-                Issued documents are locked once saved.
+                "Overdue" is now auto-derived from the due date. Issued documents are locked once saved.
               {/if}
             </span>
           </label>
@@ -306,7 +420,6 @@
               <input
                 bind:value={dueIso}
                 type="date"
-                lang={locale}
                 aria-invalid={errors.due ? 'true' : 'false'}
                 class="rounded-lg border bg-white px-3 py-2 text-sm {errors.due ? 'border-rose-500' : 'border-zinc-200'}"
               />
@@ -318,26 +431,35 @@
               {/if}
             </label>
           {/if}
+
           <label class="grid gap-1.5 text-sm font-semibold text-zinc-700">
-            Currency
-            <select bind:value={invoiceCurrency} class="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm">
-              <option value="EUR">EUR · €</option>
-              <option value="USD">USD · $</option>
-              <option value="GBP">GBP · £</option>
-              <option value="CHF">CHF</option>
-            </select>
+            <span class="flex items-center gap-1.5">
+              Tax key (Steuerschlüssel)
+              <InfoBox helpKey="invoice.taxkey" />
+            </span>
+            <div class="flex gap-2">
+              <select bind:value={taxKey} class="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm">
+                {#each TAX_KEY_PRESETS as k}
+                  <option value={k}>{k}</option>
+                {/each}
+                <option value="custom">Custom…</option>
+              </select>
+              {#if taxKey === 'custom'}
+                <input
+                  bind:value={taxKeyCustom}
+                  type="number"
+                  min="0"
+                  step="1"
+                  placeholder="No."
+                  class="w-24 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm tabular-nums"
+                />
+              {/if}
+            </div>
           </label>
-          <label class="grid gap-1.5 text-sm font-semibold text-zinc-700">
-            PO reference
-            <input
-              bind:value={poRef}
-              class="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm"
-              placeholder="PO-2026-…"
-            />
-          </label>
+
           {#if status === 'Partially paid'}
             <label class="grid gap-1.5 text-sm font-semibold text-zinc-700">
-              Paid so far
+              Paid so far (EUR)
               <input
                 type="number"
                 min="0"
@@ -355,16 +477,20 @@
         </div>
 
         <fieldset class="mt-6 grid gap-2">
-          <legend class="text-xs font-bold uppercase tracking-wide text-zinc-500">Line items</legend>
+          <legend class="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-zinc-500">
+            Line items
+            <InfoBox helpKey="invoice.stock" />
+          </legend>
           {#if errors.items}
             <p class="text-xs font-medium text-rose-700">{errors.items}</p>
           {/if}
 
           <div class="overflow-x-auto rounded-lg border border-zinc-200">
-            <table class="w-full min-w-[560px] text-left text-sm">
+            <table class="w-full min-w-[640px] text-left text-sm">
               <thead>
                 <tr class="bg-zinc-50 text-[11px] font-bold uppercase tracking-wide text-zinc-500">
                   <th class="px-3 py-2" scope="col">Description</th>
+                  <th class="px-3 py-2" scope="col">SKU</th>
                   <th class="px-3 py-2 text-right" scope="col">Qty</th>
                   <th class="px-3 py-2 text-right" scope="col">Unit</th>
                   <th class="px-3 py-2 text-right" scope="col">VAT %</th>
@@ -382,6 +508,19 @@
                         placeholder="What you are billing"
                         class="w-full rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-sm"
                       />
+                    </td>
+                    <td class="px-3 py-2">
+                      <select
+                        value={item.skuId ?? ''}
+                        onchange={(e) => onLineSkuChange(idx, e.currentTarget.value)}
+                        class="w-32 rounded-md border border-zinc-200 bg-white px-1.5 py-1.5 text-xs"
+                        title="Link this line to an inventory SKU so saving the invoice deducts stock"
+                      >
+                        <option value="">—</option>
+                        {#each inventory as sku}
+                          <option value={sku.id}>{sku.code} ({sku.qty})</option>
+                        {/each}
+                      </select>
                     </td>
                     <td class="px-3 py-2 text-right">
                       <input
@@ -451,7 +590,7 @@
             bind:value={notes}
             rows="2"
             class="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm"
-            placeholder="Payment terms, PO reference, internal note…"
+            placeholder="Payment terms, internal note…"
           ></textarea>
         </label>
 

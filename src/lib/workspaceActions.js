@@ -36,6 +36,8 @@ export function buildInventoryRow(inventory, payload) {
     name: String(payload.name ?? '').trim() || 'Untitled SKU',
     qty: Math.max(0, Math.round(Number(payload.qty) || 0)),
     reorder: Math.max(0, Math.round(Number(payload.reorder) || 0)),
+    orderedQty: Math.max(0, Math.round(Number(payload.orderedQty) || 0)),
+    orderEta: String(payload.orderEta ?? '').trim(),
     supplierCustomerId: payload.supplierCustomerId || null,
     unitCost: Math.max(0, Math.round(Number(payload.unitCost) || 0)),
     notes: String(payload.notes ?? '').trim()
@@ -125,7 +127,7 @@ function csvBlob(rows) {
 }
 
 export function buildExpensesCsvRows(expenseItems, customers) {
-  const header = ['id', 'date', 'type', 'vendor', 'amount_eur', 'supplier_customer'];
+  const header = ['id', 'date', 'type', 'vendor', 'amount_eur', 'supplier_customer', 'is_order', 'inventory_id'];
   const lines = [header.map(csvCell).join(',')];
   for (const e of expenseItems) {
     const supplier = e.supplierCustomerId ? customerName(customers, e.supplierCustomerId) : '';
@@ -135,12 +137,26 @@ export function buildExpensesCsvRows(expenseItems, customers) {
         csvCell(e.date),
         csvCell(e.type),
         csvCell(e.vendor),
-        csvCell(e.amount),
-        csvCell(supplier)
+        csvCell(expenseAmount(e)),
+        csvCell(supplier),
+        csvCell(e.isOrder ? 'yes' : ''),
+        csvCell(e.inventoryId ?? '')
       ].join(',')
     );
   }
   return csvBlob(lines);
+}
+
+/**
+ * Reads the total amount from an expense, supporting both the new multi-line
+ * shape (`items: [{description, amount}]`) and the legacy single `amount` field.
+ */
+export function expenseAmount(expense) {
+  if (!expense) return 0;
+  if (Array.isArray(expense.items) && expense.items.length) {
+    return expense.items.reduce((sum, it) => sum + (Number(it.amount) || 0), 0);
+  }
+  return Number(expense.amount) || 0;
 }
 
 export function buildInvoicesCsvRows(invoices, customers) {
@@ -228,7 +244,8 @@ function normalizeItems(items = []) {
       description: String(it.description ?? '').trim(),
       qty: Math.max(0, Number(it.qty) || 0),
       unitPrice: Math.max(0, Math.round(Number(it.unitPrice) || 0)),
-      vatRate: Number(it.vatRate ?? 0)
+      vatRate: Number(it.vatRate ?? 0),
+      skuId: it.skuId || null
     }));
 }
 
@@ -259,6 +276,7 @@ export function buildNewInvoice(invoices, payload, { settings, customer } = {}) 
     currency,
     poRef: String(payload.poRef ?? '').trim(),
     notes: String(payload.notes ?? '').trim(),
+    taxKey: String(payload.taxKey ?? settings?.defaultTaxKey ?? '3'),
     items,
     dunning: [{ kind: status === 'Offer' ? 'issued' : 'issued', at: created, note: status === 'Offer' ? 'Offer drafted' : 'Issued from workspace' }]
   };
@@ -273,7 +291,8 @@ export function applyInvoicePatch(existing, patch) {
     ...patch,
     title: patch.title != null ? String(patch.title).trim() : existing.title ?? '',
     items,
-    amount: totals.gross || Math.max(0, Math.round(Number(patch.amount ?? existing.amount) || 0))
+    amount: totals.gross || Math.max(0, Math.round(Number(patch.amount ?? existing.amount) || 0)),
+    taxKey: patch.taxKey != null ? String(patch.taxKey) : existing.taxKey ?? '3'
   };
   if (nextStatus === 'Offer') {
     next.due = '';
@@ -499,15 +518,91 @@ export function customerHasReferences(customerId, { invoices, projects, inventor
   );
 }
 
-export function createExpenseRow({ vendor, type, amount, date, supplierCustomerId, id, submittedById }) {
+export function createExpenseRow({
+  vendor,
+  type,
+  amount,
+  items,
+  date,
+  supplierCustomerId,
+  id,
+  submittedById,
+  isOrder,
+  inventoryId,
+  orderEta,
+  orderStatus
+}) {
   const rowId = id || `exp-${Date.now()}`;
+  const normalizedItems = Array.isArray(items)
+    ? items
+        .filter((it) => (it?.description ?? '').toString().trim() || Number(it?.amount))
+        .map((it) => ({
+          description: String(it.description ?? '').trim(),
+          amount: Math.max(0, Math.round(Number(it.amount) || 0)),
+          qty: Math.max(0, Math.round(Number(it.qty) || 0))
+        }))
+    : [];
+  const total =
+    normalizedItems.length > 0
+      ? normalizedItems.reduce((s, it) => s + it.amount, 0)
+      : Number(amount) || 0;
   return {
     id: rowId,
     vendor: vendor || 'New vendor',
     type: type || 'General',
-    amount: Number(amount) || 0,
+    amount: total,
+    items: normalizedItems,
     date: date || formatDe(),
     supplierCustomerId: supplierCustomerId || null,
-    submittedById: submittedById || null
+    submittedById: submittedById || null,
+    isOrder: Boolean(isOrder),
+    inventoryId: inventoryId || null,
+    orderEta: orderEta || '',
+    orderStatus: orderStatus || (isOrder ? 'ordered' : '')
   };
+}
+
+/**
+ * When an issued invoice (anything except `Offer`) carries lines linked to an
+ * SKU via `skuId`, deduct that quantity from inventory. Returns the next
+ * inventory list plus a list of human-readable warnings for SKUs that ended up
+ * at or below their reorder point — useful to surface in a toast.
+ */
+export function deductInvoiceFromInventory(inventory, invoice) {
+  if (!invoice || invoice.status === 'Offer') return { inventory, warnings: [], outOf: [] };
+  const lines = Array.isArray(invoice.items) ? invoice.items : [];
+  if (!lines.some((it) => it?.skuId)) return { inventory, warnings: [], outOf: [] };
+
+  const warnings = [];
+  const outOf = [];
+  const next = inventory.map((sku) => {
+    const lineQty = lines
+      .filter((it) => it.skuId === sku.id)
+      .reduce((s, it) => s + (Math.max(0, Math.round(Number(it.qty) || 0)) || 0), 0);
+    if (!lineQty) return sku;
+    const remaining = Math.max(0, (Number(sku.qty) || 0) - lineQty);
+    const updated = { ...sku, qty: remaining };
+    if (remaining <= 0) outOf.push(updated);
+    else if (remaining <= (Number(sku.reorder) || 0)) warnings.push(updated);
+    return updated;
+  });
+  return { inventory: next, warnings, outOf };
+}
+
+/**
+ * Receives ordered stock into on-hand inventory. Used when an expense flagged
+ * as a purchase order is "marked as received".
+ */
+export function receiveOrderIntoInventory(inventory, inventoryId, qty) {
+  if (!inventoryId || !Number(qty)) return inventory;
+  const n = Math.max(0, Math.round(Number(qty)));
+  return inventory.map((sku) =>
+    sku.id === inventoryId
+      ? {
+          ...sku,
+          qty: (Number(sku.qty) || 0) + n,
+          orderedQty: Math.max(0, (Number(sku.orderedQty) || 0) - n)
+        }
+      : sku
+  );
 }

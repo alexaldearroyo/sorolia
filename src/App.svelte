@@ -46,8 +46,12 @@
     isIssuedInvoice,
     cancelInvoiceWithCreditNote,
     buildInventoryRow,
-    issueOfferAsOpen
+    issueOfferAsOpen,
+    deductInvoiceFromInventory,
+    receiveOrderIntoInventory,
+    expenseAmount
   } from './lib/workspaceActions.js';
+  import { effectiveInvoiceStatus, effectiveCustomerHealth } from './lib/format.js';
   import { can, isPageVisible } from './lib/permissions.js';
   import { logAuditEvent, clearAuditLog, subscribeAuditLog } from './lib/auditLog.js';
   import { deriveNotifications } from './lib/notifications.js';
@@ -273,7 +277,26 @@
     return countEventsBetween(ev, isoKeyFromDate(now), isoKeyFromDate(end));
   });
 
-  let enrichedInvoices = $derived(enrichInvoices(invoices, customers));
+  /* Invoices enriched with customer name *and* with their effective status
+     (so "Open" past-due rows look — and filter — as "Overdue" everywhere). */
+  let liveNow = $state(new Date());
+  $effect(() => {
+    if (typeof window === 'undefined') return;
+    /* Re-flip overdues at midnight so the UI doesn't lag a refresh. */
+    const tick = () => (liveNow = new Date());
+    const handle = window.setInterval(tick, 5 * 60 * 1000);
+    return () => window.clearInterval(handle);
+  });
+  let enrichedInvoices = $derived(
+    enrichInvoices(invoices, customers).map((i) => ({
+      ...i,
+      status: effectiveInvoiceStatus(i, liveNow)
+    }))
+  );
+  /* Customers with auto "At risk" flip applied. */
+  let liveCustomers = $derived(
+    customers.map((c) => ({ ...c, health: effectiveCustomerHealth(c, invoices, liveNow) }))
+  );
 
   function dateInRange(de) {
     if (!invoiceDateRange.from && !invoiceDateRange.to) return true;
@@ -300,13 +323,14 @@
   let totals = $derived(
     invoices.reduce(
       (acc, row) => {
-        if (row.status === 'Paid') acc.revenue += row.amount;
-        else if (row.status === 'Partially paid') {
+        const eff = effectiveInvoiceStatus(row, liveNow);
+        if (eff === 'Paid') acc.revenue += row.amount;
+        else if (eff === 'Partially paid') {
           acc.revenue += row.amountPaid ?? 0;
           acc.pending += invoiceBalance(row);
-        } else if (row.status === 'Open' || row.status === 'Overdue') {
+        } else if (eff === 'Open' || eff === 'Overdue') {
           acc.pending += row.amount;
-          if (row.status === 'Overdue') acc.overdue += row.amount;
+          if (eff === 'Overdue') acc.overdue += row.amount;
         }
         return acc;
       },
@@ -314,10 +338,14 @@
     )
   );
 
-  let openCount = $derived(invoices.filter((r) => r.status === 'Open').length);
-  let overdueCount = $derived(invoices.filter((r) => r.status === 'Overdue').length);
+  let openCount = $derived(
+    invoices.filter((r) => effectiveInvoiceStatus(r, liveNow) === 'Open').length
+  );
+  let overdueCount = $derived(
+    invoices.filter((r) => effectiveInvoiceStatus(r, liveNow) === 'Overdue').length
+  );
   let paidCount = $derived(invoices.filter((r) => isInvoicePaid(r)).length);
-  let expenseTotal = $derived(expenseItems.reduce((sum, item) => sum + item.amount, 0));
+  let expenseTotal = $derived(expenseItems.reduce((sum, item) => sum + expenseAmount(item), 0));
 
   /* Working capital snapshot used by the header alert: paid revenue minus the
      period's expenses. Threshold is configurable in Settings. */
@@ -337,7 +365,7 @@
     };
   });
   let inventoryLowCount = $derived(inventory.filter((r) => r.qty <= r.reorder).length);
-  let atRiskCustomers = $derived(customers.filter((c) => c.health === 'At risk').length);
+  let atRiskCustomers = $derived(liveCustomers.filter((c) => c.health === 'At risk').length);
   let activeProjectsCount = $derived(
     projects.filter((p) => p.status === 'Active' || p.status === 'Planning').length
   );
@@ -358,7 +386,7 @@
 
   let topOverdueCustomer = $derived.by(() => {
     const overdue = invoices
-      .filter((i) => i.status === 'Overdue')
+      .filter((i) => effectiveInvoiceStatus(i, liveNow) === 'Overdue')
       .sort((a, b) => b.amount - a.amount)[0];
     return overdue ? customerName(customers, overdue.customerId) : '';
   });
@@ -378,7 +406,7 @@
   );
 
   let allNotifications = $derived(
-    deriveNotifications({ invoices, inventory, projects, customers })
+    deriveNotifications({ invoices, inventory, projects, customers: liveCustomers })
   );
 
   let notifications = $derived(allNotifications.filter((n) => !dismissedNoti.includes(n.id)));
@@ -390,6 +418,7 @@
     if (active === 'team') return 'Team';
     if (active === 'audit') return 'Audit log';
     if (active === 'projects') return 'Projects';
+    if (active === 'suppliers') return 'Suppliers';
     if (active === 'customer-detail')
       return customers.find((c) => c.id === customerDetailId)?.name ?? 'Customer';
     return menu.find((item) => item.id === active)?.label ?? active;
@@ -404,7 +433,9 @@
       case 'expenses':
         return `${expenseItems.length} postings · ${currency(expenseTotal)} this period`;
       case 'customers':
-        return `${customers.length} accounts · ${atRiskCustomers} flagged at risk`;
+        return `${customers.filter((c) => (c.kind ?? 'customer') !== 'supplier').length} accounts · ${atRiskCustomers} at risk (auto)`;
+      case 'suppliers':
+        return `${customers.filter((c) => c.kind === 'supplier' || c.kind === 'both').length} suppliers · referenced by inventory and expenses`;
       case 'inventory':
         return `${inventory.length} SKUs · ${inventoryLowCount} below reorder`;
       case 'projects':
@@ -459,6 +490,16 @@
         disabledHint: 'Your role cannot create customers'
       };
     }
+    if (active === 'suppliers') {
+      const allowed = can(role, 'customers.write');
+      return {
+        label: 'New supplier',
+        icon: Plus,
+        onClick: () => (customerEditor = { mode: 'create' }),
+        disabled: !allowed,
+        disabledHint: 'Your role cannot create suppliers'
+      };
+    }
     if (active === 'inventory') {
       const allowed = can(role, 'inventory.write');
       return {
@@ -472,7 +513,7 @@
     return null;
   });
 
-  const exportablePages = new Set(['home', 'invoices', 'expenses', 'customers', 'inventory', 'projects', 'hr']);
+  const exportablePages = new Set(['home', 'invoices', 'expenses', 'customers', 'suppliers', 'inventory', 'projects', 'hr']);
   let showExportButton = $derived(can(role, 'workspace.export') && exportablePages.has(active));
 
   function selectPage(id, opts = {}) {
@@ -570,20 +611,66 @@
   }
 
   function saveInvoiceCreate(payload) {
-    const customer = customers.find((c) => c.id === payload.customerId);
-    const next = buildNewInvoice(invoices, payload, { settings: companySettings, customer });
+    /* New customer created inline from the invoice form. */
+    let resolvedPayload = payload;
+    if (payload.inlineCustomer) {
+      const inline = {
+        ...payload.inlineCustomer,
+        id: nextCustomerId(customers),
+        contacts: []
+      };
+      customers = [...customers, inline];
+      audit('create', 'customer', `${inline.name} (from invoice form)`, inline.id);
+      pushToast({ kind: 'success', title: 'Customer added', body: inline.name });
+      resolvedPayload = { ...payload, customerId: inline.id, inlineCustomer: null };
+    }
+    const customer = customers.find((c) => c.id === resolvedPayload.customerId);
+    const next = buildNewInvoice(invoices, resolvedPayload, { settings: companySettings, customer });
     invoices = [...invoices, next];
     companySettings = bumpInvoiceCounter(companySettings);
     audit('create', 'invoice', `${next.id} · ${customerName(customers, next.customerId)} · ${currency(next.amount)}`, next.id);
+    applyStockDeduction(next);
     pushToast({ kind: 'success', title: 'Invoice created', body: `${next.id} · ${currency(next.amount)}` });
     invoiceEditor = null;
   }
 
   function saveInvoiceUpdate(id, patch) {
+    const before = invoices.find((i) => i.id === id);
+    const wasOffer = before?.status === 'Offer';
     invoices = invoices.map((i) => (i.id === id ? applyInvoicePatch(i, patch) : i));
     audit('update', 'invoice', `${id}`, id);
+    /* Deduct stock when an offer transitions into an issued state. */
+    if (wasOffer && patch.status && patch.status !== 'Offer') {
+      const after = invoices.find((i) => i.id === id);
+      if (after) applyStockDeduction(after);
+    }
     pushToast({ kind: 'info', title: 'Invoice updated', body: id });
     invoiceEditor = null;
+  }
+
+  function applyStockDeduction(invoice) {
+    const { inventory: nextInventory, warnings, outOf } = deductInvoiceFromInventory(inventory, invoice);
+    if (nextInventory === inventory) return;
+    inventory = nextInventory;
+    audit(
+      'update',
+      'inventory',
+      `Auto-deducted from ${invoice.id}`,
+      invoice.id
+    );
+    if (outOf.length) {
+      pushToast({
+        kind: 'warn',
+        title: `${outOf.length} SKU${outOf.length === 1 ? '' : 's'} now out of stock`,
+        body: outOf.map((s) => s.code).join(' · ')
+      });
+    } else if (warnings.length) {
+      pushToast({
+        kind: 'warn',
+        title: `${warnings.length} SKU${warnings.length === 1 ? '' : 's'} below reorder`,
+        body: warnings.map((s) => `${s.code} ${s.qty}/${s.reorder}`).join(' · ')
+      });
+    }
   }
 
   function deleteInvoice(id) {
@@ -815,6 +902,26 @@
     audit('update', 'inventory', `Qty set to ${value} on ${id}`, id);
   }
 
+  function fillUpInventory(id) {
+    if (!can(role, 'inventory.adjust')) return;
+    const row = inventory.find((r) => r.id === id);
+    if (!row) return;
+    /* Fill up to 2× reorder point as a sensible default. If the SKU has no
+       reorder threshold yet, fall back to qty + 10 so the action always does
+       something visible. */
+    const target = (Number(row.reorder) || 0) > 0 ? Number(row.reorder) * 2 : (Number(row.qty) || 0) + 10;
+    inventory = inventory.map((r) => (r.id === id ? { ...r, qty: target } : r));
+    audit('update', 'inventory', `Filled up to ${target} on ${row.code}`, id);
+    pushToast({ kind: 'success', title: 'Stock filled up', body: `${row.code} → ${target}` });
+  }
+
+  function setReorderTrigger(id, value) {
+    if (!can(role, 'inventory.adjust')) return;
+    const n = Math.max(0, Math.round(Number(value) || 0));
+    inventory = inventory.map((r) => (r.id === id ? { ...r, reorder: n } : r));
+    audit('update', 'inventory', `Reorder trigger set to ${n}`, id);
+  }
+
   function upsertInventoryRow(payload) {
     if (!can(role, 'inventory.write')) return;
     if (payload.id) {
@@ -857,26 +964,56 @@
 
   function upsertExpense(payload) {
     if (payload.id) {
-      expenseItems = expenseItems.map((e) =>
-        e.id === payload.id
-          ? {
-              ...e,
-              vendor: payload.vendor,
-              type: payload.type,
-              amount: payload.amount,
-              date: payload.date,
-              supplierCustomerId: payload.supplierCustomerId ?? null
-            }
-          : e
-      );
+      const before = expenseItems.find((e) => e.id === payload.id);
+      const updated = createExpenseRow({ ...payload, id: payload.id, submittedById: before?.submittedById });
+      expenseItems = expenseItems.map((e) => (e.id === payload.id ? { ...e, ...updated } : e));
       audit('update', 'expense', payload.vendor, payload.id);
+      reflectOrderInInventory(before, updated);
       pushToast({ kind: 'info', title: 'Expense updated', body: payload.vendor });
     } else {
       const row = createExpenseRow({ ...payload, submittedById: currentUser?.id });
       expenseItems = [...expenseItems, row];
       audit('create', 'expense', `${row.vendor} · ${currency(row.amount)}`, row.id);
+      reflectOrderInInventory(null, row);
       pushToast({ kind: 'success', title: 'Expense posted', body: `${row.vendor} · ${currency(row.amount)}` });
     }
+  }
+
+  /** Total qty across all line items of an expense. */
+  function expenseOrderedQty(expense) {
+    if (!expense) return 0;
+    if (Array.isArray(expense.items) && expense.items.length) {
+      return expense.items.reduce((s, it) => s + (Number(it.qty) || 0), 0) || 1;
+    }
+    return 1;
+  }
+
+  function reflectOrderInInventory(before, after) {
+    const wasOrder = Boolean(before?.isOrder && before?.inventoryId);
+    const isOrder = Boolean(after?.isOrder && after?.inventoryId);
+    if (!wasOrder && !isOrder) return;
+    const beforeQty = wasOrder ? expenseOrderedQty(before) : 0;
+    const afterQty = isOrder ? expenseOrderedQty(after) : 0;
+    inventory = inventory.map((sku) => {
+      let nextOrdered = Number(sku.orderedQty) || 0;
+      if (wasOrder && sku.id === before.inventoryId) nextOrdered -= beforeQty;
+      if (isOrder && sku.id === after.inventoryId) nextOrdered += afterQty;
+      return nextOrdered === (Number(sku.orderedQty) || 0)
+        ? sku
+        : { ...sku, orderedQty: Math.max(0, nextOrdered) };
+    });
+  }
+
+  function markExpenseOrderReceived(expenseId) {
+    const expense = expenseItems.find((e) => e.id === expenseId);
+    if (!expense || !expense.isOrder || !expense.inventoryId) return;
+    const qty = expenseOrderedQty(expense);
+    inventory = receiveOrderIntoInventory(inventory, expense.inventoryId, qty);
+    expenseItems = expenseItems.map((e) =>
+      e.id === expenseId ? { ...e, orderStatus: 'received' } : e
+    );
+    audit('update', 'expense', `Order received · ${expense.vendor}`, expenseId);
+    pushToast({ kind: 'success', title: 'Order received', body: expense.vendor });
   }
 
   function deleteExpense(id) {
@@ -1313,6 +1450,7 @@
     'expenses',
     'calendar',
     'customers',
+    'suppliers',
     'inventory',
     'projects',
     'hr',
@@ -1489,7 +1627,7 @@
                 {activeProjectsCount}
                 {upcomingFortnight}
                 inventory={inventory}
-                customers={customers}
+                customers={liveCustomers}
                 expenses={expenseItems}
                 showHR={can(role, 'hr.read')}
                 onViewInvoices={() => selectPage('invoices')}
@@ -1515,6 +1653,7 @@
                 {currency}
                 {locale}
                 {customers}
+                {inventory}
                 templates={invoiceTemplates}
                 {invoiceCustomerFilter}
                 {invoiceCustomerLabel}
@@ -1543,6 +1682,7 @@
                 {expenseItems}
                 {expenseTotal}
                 {customers}
+                {inventory}
                 {currency}
                 {locale}
                 canWrite={can(role, 'expenses.write')}
@@ -1551,16 +1691,37 @@
                 onUpsertExpense={upsertExpense}
                 onDeleteExpense={deleteExpense}
                 onDownloadCsv={downloadExpensesCsv}
+                onMarkOrderReceived={markExpenseOrderReceived}
                 pendingExpenseEditId={pendingExpenseEditId}
                 onConsumedExpenseDeepLink={consumeExpenseDeepLink}
               />
             {:else if active === 'customers'}
               <CustomersPage
                 bind:customerEditor
-                {customers}
+                customers={liveCustomers}
                 {invoices}
                 {projects}
                 {currency}
+                kindFilter="customer"
+                canWrite={can(role, 'customers.write')}
+                canDelete={can(role, 'customers.delete')}
+                canExport={can(role, 'workspace.export')}
+                onUpsertCustomer={upsertCustomer}
+                onDeleteCustomer={deleteCustomerRecord}
+                onOpenCustomerDetail={openCustomerDetail}
+                onOpenInvoices={(cid) => selectPage('invoices', { customerId: cid })}
+                onOpenProjects={(cid) => selectPage('projects', { customerId: cid })}
+                onOpenInventory={(cid) => selectPage('inventory', { supplierCustomerId: cid })}
+                onExportCsv={downloadCustomersCsv}
+              />
+            {:else if active === 'suppliers'}
+              <CustomersPage
+                bind:customerEditor
+                customers={liveCustomers}
+                {invoices}
+                {projects}
+                {currency}
+                kindFilter="supplier"
                 canWrite={can(role, 'customers.write')}
                 canDelete={can(role, 'customers.delete')}
                 canExport={can(role, 'workspace.export')}
@@ -1609,6 +1770,8 @@
                 canDelete={can(role, 'inventory.delete')}
                 onAdjustQty={adjustInventoryQty}
                 onSetQty={setInventoryQty}
+                onFillUp={fillUpInventory}
+                onSetReorder={setReorderTrigger}
                 onUpsertInventoryRow={upsertInventoryRow}
                 onDeleteInventoryRow={deleteInventoryRow}
                 onOpenSupplier={(cid) => openCustomerDetail(cid)}

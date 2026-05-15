@@ -4,16 +4,19 @@
   import Pencil from 'lucide-svelte/icons/pencil';
   import Trash2 from 'lucide-svelte/icons/trash-2';
   import ChevronDown from 'lucide-svelte/icons/chevron-down';
-  import { customerName } from '../workspaceActions.js';
+  import { customerName, expenseAmount } from '../workspaceActions.js';
   import { formatDe } from '../format.js';
   import ExpenseFormModal from '../components/ExpenseFormModal.svelte';
   import EmptyState from '../components/EmptyState.svelte';
+  import Package from 'lucide-svelte/icons/package';
+  import CheckCircle2 from 'lucide-svelte/icons/check-circle-2';
 
   let {
     expenseEditor = $bindable(null),
     expenseItems,
     expenseTotal,
     customers,
+    inventory = [],
     currency,
     locale = 'en-GB',
     canWrite = false,
@@ -22,6 +25,7 @@
     onUpsertExpense,
     onDeleteExpense,
     onDownloadCsv,
+    onMarkOrderReceived = () => {},
     pendingExpenseEditId = null,
     onConsumedExpenseDeepLink
   } = $props();
@@ -95,7 +99,7 @@
   let breakdown = $derived.by(() => {
     const map = new Map();
     for (const e of expenseItems) {
-      map.set(e.type, (map.get(e.type) ?? 0) + e.amount);
+      map.set(e.type, (map.get(e.type) ?? 0) + expenseAmount(e));
     }
     return Array.from(map.entries())
       .map(([label, total]) => ({ label, total, share: expenseTotal ? total / expenseTotal : 0 }))
@@ -110,6 +114,7 @@
   editor={expenseEditor}
   draftRow={expenseDraft}
   {customers}
+  {inventory}
   {locale}
   {canDelete}
   onClose={closeEditor}
@@ -121,7 +126,7 @@
   <header class="rounded-xl border border-zinc-200/80 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
     <div class="flex flex-wrap items-center gap-4">
       <div class="min-w-[10rem]">
-        <p class="text-[10px] font-bold uppercase tracking-wide text-zinc-500 dark:text-slate-400">Total OpEx</p>
+        <p class="text-[10px] font-bold uppercase tracking-wide text-zinc-500 dark:text-slate-400">Total operating costs</p>
         <p class="mt-1 text-2xl font-extrabold tabular-nums text-zinc-900 dark:text-slate-100">{currency(expenseTotal)}</p>
         <p class="text-xs text-zinc-500 dark:text-slate-400">{expenseItems.length} posting{expenseItems.length === 1 ? '' : 's'}</p>
       </div>
@@ -279,9 +284,38 @@
                   Supplier: {customerName(customers, item.supplierCustomerId)}
                 </p>
               {/if}
+              {#if item.isOrder}
+                {@const sku = inventory.find((s) => s.id === item.inventoryId)}
+                <p class="mt-0.5 flex flex-wrap items-center gap-1 text-[11px] font-semibold">
+                  {#if item.orderStatus === 'received'}
+                    <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-emerald-900">
+                      <CheckCircle2 class="h-3 w-3" aria-hidden="true" />
+                      Received
+                    </span>
+                  {:else}
+                    <span class="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2 py-0.5 text-sky-900">
+                      <Package class="h-3 w-3" aria-hidden="true" />
+                      On the way{item.orderEta ? ` · ETA ${item.orderEta}` : ''}
+                    </span>
+                  {/if}
+                  {#if sku}
+                    <span class="text-zinc-500">→ {sku.code}</span>
+                  {/if}
+                </p>
+              {/if}
             </div>
-            <span class="text-base font-bold tabular-nums text-zinc-900 dark:text-slate-100">{currency(item.amount)}</span>
+            <span class="text-base font-bold tabular-nums text-zinc-900 dark:text-slate-100">{currency(expenseAmount(item))}</span>
             <div class="flex shrink-0 gap-1">
+              {#if canWrite && item.isOrder && item.orderStatus !== 'received'}
+                <button
+                  type="button"
+                  class="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-900 hover:bg-emerald-100"
+                  onclick={() => onMarkOrderReceived(item.id)}
+                  title="Move ordered qty into on-hand inventory"
+                >
+                  Mark as received
+                </button>
+              {/if}
               {#if canWrite}
                 <button
                   type="button"

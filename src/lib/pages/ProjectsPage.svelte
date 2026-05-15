@@ -7,6 +7,9 @@
   import { customerName } from '../workspaceActions.js';
   import { parseDeDate } from '../format.js';
   import EmptyState from '../components/EmptyState.svelte';
+  import InfoBox from '../components/InfoBox.svelte';
+  import ChevronLeft from 'lucide-svelte/icons/chevron-left';
+  import ChevronRight from 'lucide-svelte/icons/chevron-right';
   import CalendarPage from './CalendarPage.svelte';
 
   let {
@@ -32,10 +35,33 @@
 
   let query = $state('');
   let statusFilter = $state(/** @type {'All'|'Active'|'Planning'|'On hold'} */ ('All'));
+  /** ISO yyyy-mm of the currently focused month chip; null = show everything. */
+  let focusMonthKey = $state(/** @type {string | null} */ (null));
+  let monthStripEl = $state(/** @type {HTMLElement | undefined} */ (undefined));
+
+  function monthsBetween(start, end) {
+    if (!start || !end) return [];
+    const out = [];
+    const d = new Date(start.getFullYear(), start.getMonth(), 1);
+    const stop = new Date(end.getFullYear(), end.getMonth(), 1);
+    while (d <= stop) {
+      out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+      d.setMonth(d.getMonth() + 1);
+    }
+    return out;
+  }
 
   let filtered = $derived.by(() => {
     let rows = projects;
     if (statusFilter !== 'All') rows = rows.filter((p) => p.status === statusFilter);
+    if (focusMonthKey) {
+      rows = rows.filter((p) => {
+        const start = parseDeDate(p.startDate);
+        const end = parseDeDate(p.endDate);
+        if (!start || !end) return false;
+        return monthsBetween(start, end).includes(focusMonthKey);
+      });
+    }
     if (query.trim()) {
       const q = query.toLowerCase();
       rows = rows.filter((p) =>
@@ -45,6 +71,44 @@
       );
     }
     return rows;
+  });
+
+  /** Month chips that span every project's start–end window (deduped & sorted). */
+  let monthChips = $derived.by(() => {
+    const set = new Set();
+    for (const p of projects) {
+      const start = parseDeDate(p.startDate);
+      const end = parseDeDate(p.endDate);
+      if (!start || !end) continue;
+      for (const k of monthsBetween(start, end)) set.add(k);
+    }
+    const todayKey = (() => {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    })();
+    set.add(todayKey);
+    return Array.from(set)
+      .sort()
+      .map((key) => {
+        const [y, m] = key.split('-').map(Number);
+        const label = new Date(y, m - 1, 1).toLocaleDateString('en-GB', { month: 'short', year: '2-digit' });
+        return { key, label, isCurrent: key === todayKey };
+      });
+  });
+
+  function scrollMonths(delta) {
+    monthStripEl?.scrollBy({ left: delta, behavior: 'smooth' });
+  }
+
+  $effect(() => {
+    if (!monthChips.length) return;
+    queueMicrotask(() => {
+      if (!monthStripEl) return;
+      const current = monthStripEl.querySelector('[data-current="true"]');
+      if (current instanceof HTMLElement) {
+        current.scrollIntoView({ behavior: 'auto', inline: 'center', block: 'nearest' });
+      }
+    });
   });
 
   let timeline = $derived.by(() => {
@@ -94,6 +158,62 @@
         </p>
       </div>
     </header>
+
+    {#if monthChips.length}
+      <div class="mb-4 flex items-center gap-2">
+        <button
+          type="button"
+          class="hidden shrink-0 rounded-full border border-zinc-200 bg-white p-1.5 text-zinc-600 transition hover:bg-zinc-50 sm:inline-flex dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+          onclick={() => scrollMonths(-240)}
+          aria-label="Previous months"
+        >
+          <ChevronLeft class="h-4 w-4" aria-hidden="true" />
+        </button>
+        <div
+          bind:this={monthStripEl}
+          class="flex flex-1 cursor-grab snap-x snap-mandatory gap-2 overflow-x-auto pb-1 active:cursor-grabbing"
+          aria-label="Months"
+          role="tablist"
+        >
+          {#each monthChips as chip}
+            <button
+              type="button"
+              data-current={chip.isCurrent ? 'true' : 'false'}
+              aria-selected={focusMonthKey === chip.key}
+              class="snap-start shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold transition {focusMonthKey === chip.key
+                ? 'border-leah-900 bg-leah-900 text-white'
+                : chip.isCurrent
+                  ? 'border-amber-300 bg-amber-50 text-amber-900 hover:border-amber-400'
+                  : 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200'}"
+              onclick={() => (focusMonthKey = focusMonthKey === chip.key ? null : chip.key)}
+              role="tab"
+            >
+              {chip.label}{chip.isCurrent ? ' · now' : ''}
+            </button>
+          {/each}
+        </div>
+        <button
+          type="button"
+          class="hidden shrink-0 rounded-full border border-zinc-200 bg-white p-1.5 text-zinc-600 transition hover:bg-zinc-50 sm:inline-flex dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+          onclick={() => scrollMonths(240)}
+          aria-label="Next months"
+        >
+          <ChevronRight class="h-4 w-4" aria-hidden="true" />
+        </button>
+        <span class="hidden lg:inline-flex">
+          <InfoBox helpKey="projects.months" />
+        </span>
+        {#if focusMonthKey}
+          <button
+            type="button"
+            class="shrink-0 text-xs font-semibold text-leah-800 hover:underline dark:text-leah-700"
+            onclick={() => (focusMonthKey = null)}
+          >
+            Clear
+          </button>
+        {/if}
+      </div>
+    {/if}
 
     <header class="mb-4 flex flex-wrap items-center gap-3">
       <div class="relative flex-1 min-w-[14rem]">

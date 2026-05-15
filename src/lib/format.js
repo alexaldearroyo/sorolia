@@ -91,6 +91,37 @@ export function daysUntilDue(dueDe, now = new Date()) {
 }
 
 /**
+ * Returns the *effective* status of an invoice. An invoice whose stored status
+ * is `Open` automatically reports `Overdue` once the due date passes — this
+ * collapses the manual `Open` / `Overdue` distinction the team complained
+ * about (an open invoice past its due cannot also be open). Storage still
+ * allows `Overdue` for back-compat with the seeded dataset.
+ */
+export function effectiveInvoiceStatus(invoice, now = new Date()) {
+  if (!invoice) return '';
+  const stored = String(invoice.status ?? '');
+  if (stored !== 'Open' && stored !== 'Overdue') return stored;
+  const days = daysUntilDue(invoice.due, now);
+  if (days == null) return stored;
+  return days < 0 ? 'Overdue' : 'Open';
+}
+
+/**
+ * Auto-flips a customer's health to "At risk" whenever they have at least one
+ * effectively overdue invoice. A customer manually set to "At risk" stays that
+ * way; otherwise we honour the stored health.
+ */
+export function effectiveCustomerHealth(customer, invoices = [], now = new Date()) {
+  if (!customer) return 'Good';
+  const stored = String(customer.health ?? 'Good');
+  if (stored === 'At risk') return stored;
+  const hasOverdue = invoices.some(
+    (inv) => inv.customerId === customer.id && effectiveInvoiceStatus(inv, now) === 'Overdue'
+  );
+  return hasOverdue ? 'At risk' : stored;
+}
+
+/**
  * Returns a tag for an open/overdue invoice based on its due date.
  * Paid and Offer rows are intentionally not annotated.
  * @returns {{ kind: 'overdue' | 'due-soon', label: string } | null}

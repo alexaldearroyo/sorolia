@@ -4,12 +4,22 @@
   import { useEscape } from '../escape.js';
   import { lockDialogFocus } from '../dialogFocus.js';
 
-  let { editor, draftRow, canDelete = true, onClose, onSave, onDelete } = $props();
+  let {
+    editor,
+    draftRow,
+    canDelete = true,
+    defaultKind = 'customer',
+    onClose,
+    onSave,
+    onDelete
+  } = $props();
 
   let name = $state('');
   let country = $state('');
   let segment = $state('');
   let health = $state('Good');
+  let kind = $state('customer');
+  let isPrivate = $state(false);
   let email = $state('');
   let phone = $state('');
   let vatId = $state('');
@@ -35,6 +45,8 @@
       country = 'DE';
       segment = '';
       health = 'Good';
+      kind = defaultKind;
+      isPrivate = false;
       email = '';
       phone = '';
       vatId = '';
@@ -48,6 +60,8 @@
       country = draftRow.country ?? '';
       segment = draftRow.segment ?? '';
       health = draftRow.health ?? 'Good';
+      kind = draftRow.kind ?? 'customer';
+      isPrivate = Boolean(draftRow.isPrivate);
       email = draftRow.email ?? '';
       phone = draftRow.phone ?? '';
       vatId = draftRow.vatId ?? '';
@@ -121,9 +135,11 @@
       country: country.trim().toUpperCase(),
       segment: segment.trim(),
       health,
+      kind,
+      isPrivate,
       email: email.trim(),
       phone: phone.trim(),
-      vatId: vatId.trim(),
+      vatId: isPrivate ? '' : vatId.trim(),
       address: address.trim(),
       paymentTermsDays: Math.max(0, Math.min(120, Number(paymentTermsDays) || 0)),
       notes: notes.trim(),
@@ -221,8 +237,25 @@
             {/if}
           </label>
           <label class="grid gap-1.5 text-sm font-semibold text-zinc-700">
+            Record type
+            <select bind:value={kind} class="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm">
+              <option value="customer">Customer</option>
+              <option value="supplier">Supplier</option>
+              <option value="both">Both</option>
+            </select>
+          </label>
+          <label class="grid gap-1.5 text-sm font-semibold text-zinc-700">
             VAT ID
-            <input bind:value={vatId} class="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm" placeholder="DE…" />
+            <input
+              bind:value={vatId}
+              disabled={isPrivate}
+              class="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm disabled:bg-zinc-100"
+              placeholder={isPrivate ? '— private person —' : 'DE…'}
+            />
+            <label class="mt-1 inline-flex items-center gap-1.5 text-[11px] font-medium text-zinc-500">
+              <input type="checkbox" bind:checked={isPrivate} class="h-3 w-3" />
+              Private person (no VAT-ID required)
+            </label>
           </label>
           <label class="grid gap-1.5 text-sm font-semibold text-zinc-700">
             Health

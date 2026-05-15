@@ -1,5 +1,5 @@
 import { customerName } from './workspaceActions.js';
-import { daysUntilDue } from './format.js';
+import { daysUntilDue, effectiveInvoiceStatus } from './format.js';
 
 /**
  * Builds a fresh list of derived notifications from the current workspace state.
@@ -12,7 +12,8 @@ export function deriveNotifications({ invoices, inventory, projects, customers }
   const now = new Date();
 
   for (const inv of invoices) {
-    if (inv.status === 'Overdue') {
+    const eff = effectiveInvoiceStatus(inv, now);
+    if (eff === 'Overdue') {
       const days = daysUntilDue(inv.due, now);
       const lateDays = days != null ? Math.abs(Math.min(0, days)) : null;
       out.push({
@@ -26,7 +27,7 @@ export function deriveNotifications({ invoices, inventory, projects, customers }
             : `${customerName(customers, inv.customerId)} · past due`,
         link: { page: 'invoices', editInvoiceId: inv.id }
       });
-    } else if (inv.status === 'Open') {
+    } else if (eff === 'Open') {
       const days = daysUntilDue(inv.due, now);
       if (days != null && days >= 0 && days <= 3) {
         out.push({

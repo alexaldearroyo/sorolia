@@ -23,6 +23,7 @@
     invoiceCustomerLabel,
     onClearInvoiceCustomerFilter,
     customers,
+    inventory = [],
     invoiceEditor,
     invoiceDraftRow,
     companySettings = null,
@@ -135,6 +136,7 @@
   editor={invoiceEditor}
   draftRow={invoiceDraftRow}
   {customers}
+  {inventory}
   settings={companySettings}
   {locale}
   {canDelete}
