@@ -103,6 +103,7 @@ export const customersSeed = [
     segment: 'Industrial',
     kind: 'both',
     health: 'At risk',
+    past: 0,
     email: 'ap@klaerstahl.de',
     phone: '+49 234 5567 100',
     vatId: 'DE258994001',
@@ -121,6 +122,7 @@ export const customersSeed = [
     country: 'DE',
     segment: 'Food',
     health: 'Good',
+    past: 0,
     email: 'finanz@biowerk.bayern',
     phone: '+49 89 4458 220',
     vatId: 'DE301552000',
@@ -138,7 +140,8 @@ export const customersSeed = [
     country: 'DE',
     segment: 'Infra',
     kind: 'both',
-    health: 'Good',
+    health: 'At risk',
+    past: 3,
     email: 'billing@nordlicht-dc.de',
     phone: '+49 40 5512 8800',
     vatId: 'DE294001220',
@@ -157,6 +160,7 @@ export const customersSeed = [
     country: 'DE',
     segment: 'Services',
     health: 'Good',
+    past: 0,
     email: 'office@merz-kollegen.de',
     phone: '+49 711 4477 990',
     vatId: 'DE271449908',
@@ -173,6 +177,7 @@ export const customersSeed = [
     segment: 'Software',
     kind: 'both',
     health: 'Watch',
+    past: 0,
     email: 'compta@velvet-labs.fr',
     phone: '+33 1 5532 9900',
     vatId: 'FR67901223455',
@@ -192,6 +197,7 @@ export const customersSeed = [
     segment: 'Industrial',
     kind: 'supplier',
     health: 'Good',
+    past: 0,
     email: 'ap@kaiser-fertigung.de',
     phone: '+49 7141 220 7700',
     vatId: 'DE188003344',
@@ -207,6 +213,7 @@ export const customersSeed = [
     country: 'DE',
     segment: 'Logistics',
     health: 'Good',
+    past: 0,
     email: 'invoices@bergbau-sued.de',
     phone: '+49 851 90100',
     vatId: 'DE204488118',
@@ -223,6 +230,7 @@ export const customersSeed = [
     segment: 'Real estate',
     kind: 'supplier',
     health: 'Good',
+    past: 0,
     email: 'service@siemensstadt-park.de',
     phone: '+49 30 4006 5520',
     vatId: 'DE150022007',
@@ -270,7 +278,7 @@ export const invoicesSeed = [
     id: 'INV-2026-0156',
     customerId: 'cust-2',
     created: '02/04/2026',
-    due: '16/04/2026',
+    due: '09/06/2027',
     status: 'Open',
     amount: 6240,
     amountPaid: 0,
@@ -287,6 +295,7 @@ export const invoicesSeed = [
   {
     id: 'INV-2026-0152',
     customerId: 'cust-3',
+    projectId: 'pr-1',
     created: '01/04/2026',
     due: '15/04/2026',
     status: 'Paid',
@@ -307,6 +316,7 @@ export const invoicesSeed = [
   {
     id: 'INV-2026-0159',
     customerId: 'cust-4',
+    projectId: 'pr-2',
     created: '04/04/2026',
     due: '18/04/2026',
     status: 'Paid',
@@ -325,8 +335,9 @@ export const invoicesSeed = [
   {
     id: 'INV-2026-0161',
     customerId: 'cust-5',
+    projectId: 'pr-4',
     created: '05/04/2026',
-    due: '19/04/2026',
+    due: '',
     status: 'Offer',
     amount: 12750,
     amountPaid: 0,
@@ -342,6 +353,7 @@ export const invoicesSeed = [
   {
     id: 'INV-2026-0164',
     customerId: 'cust-6',
+    projectId: 'pr-3',
     created: '08/04/2026',
     due: '22/04/2026',
     status: 'Partially paid',
@@ -360,7 +372,7 @@ export const invoicesSeed = [
     id: 'INV-2026-0166',
     customerId: 'cust-7',
     created: '09/04/2026',
-    due: '23/04/2026',
+    due: '09/06/2027',
     status: 'Open',
     amount: 4180,
     amountPaid: 0,
@@ -376,6 +388,7 @@ export const invoicesSeed = [
   {
     id: 'INV-2026-0140',
     customerId: 'cust-3',
+    projectId: 'pr-1',
     created: '14/02/2026',
     due: '28/02/2026',
     status: 'Paid',
@@ -417,8 +430,9 @@ export const invoicesSeed = [
   {
     id: 'INV-2026-0167',
     customerId: 'cust-5',
+    projectId: 'pr-4',
     created: '12/04/2026',
-    due: '12/05/2026',
+    due: '09/06/2027',
     status: 'Open',
     amount: 4860,
     amountPaid: 0,
@@ -473,6 +487,7 @@ export const expenseItemsSeed = [
     type: 'Software',
     amount: 612,
     date: '03/04/2026',
+    projectId: 'pr-4',
     supplierCustomerId: null,
     submittedById: 'u-2'
   },
@@ -482,6 +497,7 @@ export const expenseItemsSeed = [
     type: 'Travel',
     amount: 284,
     date: '05/04/2026',
+    projectId: 'pr-1',
     supplierCustomerId: null,
     submittedById: 'u-3'
   },
@@ -491,6 +507,7 @@ export const expenseItemsSeed = [
     type: 'Infrastructure',
     amount: 1042,
     date: '08/04/2026',
+    projectId: 'pr-1',
     supplierCustomerId: null,
     submittedById: 'u-2'
   },
@@ -500,16 +517,17 @@ export const expenseItemsSeed = [
     type: 'Legal',
     amount: 2400,
     date: '10/04/2026',
+    projectId: 'pr-2',
     supplierCustomerId: null,
     submittedById: 'u-1'
   }
 ];
 
 export const inventorySeed = [
-  { id: 'sku-1', code: 'SWG-2400', name: 'HV switchgear cabinet', qty: 12, reorder: 8, supplierCustomerId: 'cust-1' },
-  { id: 'sku-2', code: 'PLC-X1', name: 'Safety PLC module', qty: 4, reorder: 10, supplierCustomerId: 'cust-6' },
-  { id: 'sku-3', code: 'RCK-42U', name: '42U cold-aisle rack kit', qty: 22, reorder: 6, supplierCustomerId: 'cust-3' },
-  { id: 'sku-4', code: 'LIC-ERP', name: 'ERP connector seats (annual)', qty: 150, reorder: 40, supplierCustomerId: 'cust-5' }
+  { id: 'sku-1', code: 'SWG-2400', name: 'HV switchgear cabinet', qty: 12, reorder: 8, supplierCustomerId: 'cust-1', unitCost: 3650 },
+  { id: 'sku-2', code: 'PLC-X1', name: 'Safety PLC module', qty: 4, reorder: 10, supplierCustomerId: 'cust-6', unitCost: 780 },
+  { id: 'sku-3', code: 'RCK-42U', name: '42U cold-aisle rack kit', qty: 22, reorder: 6, supplierCustomerId: 'cust-3', unitCost: 3200 },
+  { id: 'sku-4', code: 'LIC-ERP', name: 'ERP connector seats (annual)', qty: 150, reorder: 40, supplierCustomerId: 'cust-5', unitCost: 270 }
 ];
 
 /** Projects also carry start/end dates so we can paint a timeline. */

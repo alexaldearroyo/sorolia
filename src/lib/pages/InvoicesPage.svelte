@@ -18,11 +18,16 @@
     selection = $bindable(),
     visibleInvoices,
     kanbanColumns,
+    overdueCount = 0,
     currency,
     invoiceCustomerFilter,
     invoiceCustomerLabel,
+    invoiceProjectFilter,
+    invoiceProjectLabel,
     onClearInvoiceCustomerFilter,
+    onClearInvoiceProjectFilter,
     customers,
+    projects = [],
     inventory = [],
     invoiceEditor,
     invoiceDraftRow,
@@ -47,7 +52,10 @@
 
   const now = new Date();
 
-  const FILTER_OPTIONS = ['All', 'Offer', 'Open', 'Partially paid', 'Paid', 'Overdue', 'Cancelled', 'Credit note'];
+  const FILTER_OPTIONS_ALL = ['All', 'Offer', 'Open', 'Partially paid', 'Paid', 'Overdue', 'Cancelled', 'Credit note'];
+  const filterOptions = $derived(
+    overdueCount > 0 ? FILTER_OPTIONS_ALL : FILTER_OPTIONS_ALL.filter((o) => o !== 'Overdue')
+  );
 
   /**
    * Returns a small descriptor for the destructive action shown on a row.
@@ -122,13 +130,17 @@
   let filtersOpen = $state(false);
 
   let activeFilterCount = $derived(
-    (filter !== 'All' ? 1 : 0) + (dateRange.from || dateRange.to ? 1 : 0) + (invoiceCustomerFilter ? 1 : 0)
+    (filter !== 'All' ? 1 : 0) +
+      (dateRange.from || dateRange.to ? 1 : 0) +
+      (invoiceCustomerFilter ? 1 : 0) +
+      (invoiceProjectFilter ? 1 : 0)
   );
 
   function clearAllFilters() {
     filter = 'All';
     setRange('', '');
     onClearInvoiceCustomerFilter?.();
+    onClearInvoiceProjectFilter?.();
   }
 </script>
 
@@ -136,6 +148,7 @@
   editor={invoiceEditor}
   draftRow={invoiceDraftRow}
   {customers}
+  {projects}
   {inventory}
   settings={companySettings}
   {locale}
@@ -209,6 +222,14 @@
         </button>
       </span>
     {/if}
+    {#if invoiceProjectFilter}
+      <span class="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-900 dark:border-emerald-700/50 dark:bg-emerald-900/40 dark:text-emerald-100">
+        {invoiceProjectLabel}
+        <button type="button" class="rounded-full p-0.5 hover:bg-emerald-100 dark:hover:bg-emerald-800" onclick={onClearInvoiceProjectFilter} aria-label="Clear project scope">
+          <X class="h-3 w-3" aria-hidden="true" />
+        </button>
+      </span>
+    {/if}
     {#if activeFilterCount > 1}
       <button
         type="button"
@@ -236,7 +257,7 @@
       <div>
         <p class="mb-1.5 font-semibold uppercase tracking-wide text-zinc-500 dark:text-slate-400">Status</p>
         <div class="flex flex-wrap gap-1.5" role="group" aria-label="Invoice status filter">
-          {#each FILTER_OPTIONS as option}
+          {#each filterOptions as option}
             <button
               type="button"
               aria-pressed={filter === option}
@@ -416,7 +437,7 @@
     <div class="mt-6 hidden overflow-x-auto rounded-lg border border-zinc-200 md:block dark:border-slate-700">
       <table class="w-full min-w-[860px] text-left text-sm">
         <caption class="sr-only">Invoices · use the filter chips above to narrow the list</caption>
-        <thead>
+        <thead class="sticky top-0 z-10">
           <tr class="border-b border-zinc-200 bg-zinc-50 text-xs font-bold uppercase tracking-wide text-zinc-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
             <th class="px-3 py-3" scope="col">
               {#if canWrite || canDelete}

@@ -84,6 +84,7 @@
   import CustomerDetailPage from './lib/pages/CustomerDetailPage.svelte';
   import InventoryPage from './lib/pages/InventoryPage.svelte';
   import ProjectsPage from './lib/pages/ProjectsPage.svelte';
+  import CalendarPage from './lib/pages/CalendarPage.svelte';
   import HRPage from './lib/pages/HRPage.svelte';
   import TeamPage from './lib/pages/TeamPage.svelte';
   import AuditLogPage from './lib/pages/AuditLogPage.svelte';
@@ -111,6 +112,7 @@
   let persistEnabled = $state(loadPersistFlag());
 
   let invoiceCustomerFilter = $state(null);
+  let invoiceProjectFilter = $state(null);
   let invoiceDateRange = $state({ from: '', to: '' });
   let invoiceSelection = $state(/** @type {string[]} */ ([]));
   let customerDetailId = $state(/** @type {string | null} */ (null));
@@ -126,6 +128,7 @@
   /** @type {null | { mode: 'create' } | { mode: 'edit', id: string }} */
   let inventoryEditor = $state(null);
   let projectCustomerFilter = $state(null);
+  let expenseProjectFilter = $state(null);
   let inventoryHighlightSupplierId = $state(null);
   let pendingExpenseEditId = $state(null);
   /** @type {null | any} */
@@ -313,6 +316,9 @@
     if (invoiceCustomerFilter) {
       rows = rows.filter((r) => r.customerId === invoiceCustomerFilter);
     }
+    if (invoiceProjectFilter) {
+      rows = rows.filter((r) => r.projectId === invoiceProjectFilter);
+    }
     if (filter !== 'All') {
       rows = rows.filter((row) => row.status === filter);
     }
@@ -344,6 +350,12 @@
   let overdueCount = $derived(
     invoices.filter((r) => effectiveInvoiceStatus(r, liveNow) === 'Overdue').length
   );
+  let invoiceKanbanColumns = $derived(
+    overdueCount > 0 ? kanbanColumns : kanbanColumns.filter((c) => c !== 'Overdue')
+  );
+  $effect(() => {
+    if (overdueCount === 0 && filter === 'Overdue') filter = 'All';
+  });
   let paidCount = $derived(invoices.filter((r) => isInvoicePaid(r)).length);
   let expenseTotal = $derived(expenseItems.reduce((sum, item) => sum + expenseAmount(item), 0));
 
@@ -372,6 +384,19 @@
 
   let invoiceCustomerLabel = $derived(
     invoiceCustomerFilter ? customerName(customers, invoiceCustomerFilter) : ''
+  );
+  let invoiceProjectLabel = $derived(
+    invoiceProjectFilter ? projects.find((p) => p.id === invoiceProjectFilter)?.name ?? '' : ''
+  );
+
+  let visibleExpenseItems = $derived(
+    expenseProjectFilter ? expenseItems.filter((e) => e.projectId === expenseProjectFilter) : expenseItems
+  );
+  let visibleExpenseTotal = $derived(
+    visibleExpenseItems.reduce((sum, item) => sum + expenseAmount(item), 0)
+  );
+  let expenseProjectLabel = $derived(
+    expenseProjectFilter ? projects.find((p) => p.id === expenseProjectFilter)?.name ?? '' : ''
   );
 
   let projectCustomerLabel = $derived(
@@ -418,6 +443,7 @@
     if (active === 'team') return 'Team';
     if (active === 'audit') return 'Audit log';
     if (active === 'projects') return 'Projects';
+    if (active === 'calendar') return 'Calendar';
     if (active === 'suppliers') return 'Suppliers';
     if (active === 'customer-detail')
       return customers.find((c) => c.id === customerDetailId)?.name ?? 'Customer';
@@ -442,6 +468,8 @@
         return projectCustomerFilter
           ? `Budget vs customer revenue · ${visibleProjects.length} of ${projects.length} initiatives · delivery schedule below`
           : `Budget vs customer revenue · ${projects.length} initiatives · calendar integrated below`;
+      case 'calendar':
+        return 'Invoices and expenses by date · switch between month, week and year views';
       case 'hr':
         return `People mapped to delivery projects · ${employees.length} profiles`;
       case 'team':
@@ -524,8 +552,10 @@
 
     if (id === 'invoices') {
       invoiceCustomerFilter = opts.customerId ?? null;
+      invoiceProjectFilter = opts.projectId ?? null;
     } else {
       invoiceCustomerFilter = null;
+      invoiceProjectFilter = null;
       invoiceEditor = null;
       invoiceSelection = [];
     }
@@ -548,8 +578,10 @@
 
     if (id === 'expenses') {
       pendingExpenseEditId = opts.expenseEditId ?? null;
+      expenseProjectFilter = opts.projectId ?? null;
     } else {
       pendingExpenseEditId = null;
+      expenseProjectFilter = null;
     }
 
     if (id === 'customer-detail') {
@@ -1182,9 +1214,11 @@
         customerEditor = null;
         inventoryEditor = null;
         invoiceCustomerFilter = null;
+        invoiceProjectFilter = null;
         invoiceDateRange = { from: '', to: '' };
         invoiceSelection = [];
         projectCustomerFilter = null;
+        expenseProjectFilter = null;
         inventoryHighlightSupplierId = null;
         pendingExpenseEditId = null;
         customerDetailId = null;
@@ -1453,6 +1487,7 @@
     'suppliers',
     'inventory',
     'projects',
+    'calendar',
     'hr',
     'account',
     'settings',
@@ -1463,7 +1498,7 @@
 
   function navigateFromHash(page, sub) {
     if (page === 'calendar') {
-      selectPage('projects', { scrollTo: 'schedule' });
+      selectPage('calendar');
       return;
     }
     if (page === 'customer-detail' && sub) {
@@ -1546,7 +1581,9 @@
   });
 
   /** Page transition class — re-keyed each route change. */
-  let pageKey = $derived(`${active}-${customerDetailId ?? ''}-${invoiceCustomerFilter ?? ''}-${projectCustomerFilter ?? ''}`);
+  let pageKey = $derived(
+    `${active}-${customerDetailId ?? ''}-${invoiceCustomerFilter ?? ''}-${invoiceProjectFilter ?? ''}-${projectCustomerFilter ?? ''}-${expenseProjectFilter ?? ''}`
+  );
 </script>
 
 {#if !loggedIn || !currentUser}
@@ -1639,7 +1676,7 @@
                 onGoProjects={() => selectPage('projects')}
                 onGoExpenses={() => selectPage('expenses')}
                 onGoHR={() => selectPage('hr')}
-                onGoCalendar={() => selectPage('projects', { scrollTo: 'schedule' })}
+                onGoCalendar={() => selectPage('calendar')}
                 invoices={invoices}
               />
             {:else if active === 'invoices'}
@@ -1649,14 +1686,18 @@
                 bind:dateRange={invoiceDateRange}
                 bind:selection={invoiceSelection}
                 {visibleInvoices}
-                {kanbanColumns}
+                kanbanColumns={invoiceKanbanColumns}
+                {overdueCount}
                 {currency}
                 {locale}
                 {customers}
+                {projects}
                 {inventory}
                 templates={invoiceTemplates}
                 {invoiceCustomerFilter}
                 {invoiceCustomerLabel}
+                {invoiceProjectFilter}
+                {invoiceProjectLabel}
                 {invoiceEditor}
                 invoiceDraftRow={invoiceDraftRow}
                 companySettings={companySettings}
@@ -1664,6 +1705,7 @@
                 canDelete={can(role, 'invoices.delete')}
                 canExport={can(role, 'workspace.export')}
                 onClearInvoiceCustomerFilter={() => (invoiceCustomerFilter = null)}
+                onClearInvoiceProjectFilter={() => (invoiceProjectFilter = null)}
                 onCloseInvoiceEditor={() => (invoiceEditor = null)}
                 onSaveInvoiceCreate={saveInvoiceCreate}
                 onSaveInvoiceUpdate={saveInvoiceUpdate}
@@ -1679,10 +1721,14 @@
             {:else if active === 'expenses'}
               <ExpensesPage
                 bind:expenseEditor
-                {expenseItems}
-                {expenseTotal}
+                expenseItems={visibleExpenseItems}
+                expenseTotal={visibleExpenseTotal}
                 {customers}
+                {projects}
                 {inventory}
+                {expenseProjectFilter}
+                {expenseProjectLabel}
+                onClearExpenseProjectFilter={() => (expenseProjectFilter = null)}
                 {currency}
                 {locale}
                 canWrite={can(role, 'expenses.write')}
@@ -1788,13 +1834,25 @@
                 projectCustomerLabel={projectCustomerLabel}
                 onClearProjectCustomerFilter={() => (projectCustomerFilter = null)}
                 onOpenCustomer={(cid) => openCustomerDetail(cid)}
-                onOpenInvoices={(cid) => selectPage('invoices', { customerId: cid })}
+                onOpenInvoices={(projectId) => selectPage('invoices', { projectId })}
+                onOpenExpenses={(projectId) => selectPage('expenses', { projectId })}
                 invoices={invoices}
                 expenseItems={expenseItems}
                 onOpenInvoiceEdit={openCalendarInvoiceEdit}
                 onOpenExpenseEdit={openCalendarExpenseEdit}
                 onOpenProjectById={openCalendarProjectById}
                 scheduleScrollNonce={projectsScheduleScrollNonce}
+              />
+            {:else if active === 'calendar'}
+              <CalendarPage
+                invoices={invoices}
+                expenseItems={expenseItems}
+                projects={[]}
+                {customers}
+                {locale}
+                onOpenInvoiceEdit={openCalendarInvoiceEdit}
+                onOpenExpenseEdit={openCalendarExpenseEdit}
+                onOpenProjectById={openCalendarProjectById}
               />
             {:else if active === 'hr' && can(role, 'hr.read')}
               <HRPage {employees} {projects} {customers} onOpenProject={openProjectFromHR} />

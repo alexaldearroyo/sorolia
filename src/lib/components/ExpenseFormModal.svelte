@@ -10,8 +10,7 @@
   let {
     editor,
     draftRow,
-    customers,
-    inventory = [],
+    projects = [],
     onClose,
     onSave,
     onDelete
@@ -21,6 +20,7 @@
   let type = $state('General');
   let dateIso = $state('');
   let supplierId = $state('');
+  let projectId = $state('');
   let items = $state(/** @type {Array<{description:string, amount:string, qty:string}>} */ ([{ description: '', amount: '', qty: '' }]));
   let isOrder = $state(false);
   let inventoryId = $state('');
@@ -46,6 +46,7 @@
       type = 'General';
       dateIso = todayIso();
       supplierId = '';
+      projectId = '';
       isOrder = false;
       inventoryId = '';
       orderEta = '';
@@ -55,6 +56,7 @@
       type = draftRow.type;
       dateIso = deDateToIso(draftRow.date) || todayIso();
       supplierId = draftRow.supplierCustomerId ?? '';
+      projectId = draftRow.projectId ?? '';
       isOrder = Boolean(draftRow.isOrder);
       inventoryId = draftRow.inventoryId ?? '';
       orderEta = draftRow.orderEta ?? '';
@@ -136,6 +138,7 @@
         })),
       date: dateDe,
       supplierCustomerId: supplierId || null,
+      projectId: projectId || null,
       isOrder,
       inventoryId: isOrder ? inventoryId || null : null,
       orderEta: isOrder ? orderEta : '',
@@ -153,7 +156,6 @@
     editor?.mode === 'create' ? 'New expense' : draftRow ? `Edit ${draftRow.vendor}` : 'Edit expense'
   );
 
-  const linkedSku = $derived(inventory.find((s) => s.id === inventoryId) ?? null);
 </script>
 
 {#if open}
@@ -214,13 +216,16 @@
             </select>
           </label>
           <label class="grid gap-1.5 text-sm font-semibold text-zinc-700 sm:col-span-2">
-            Supplier (optional)
-            <select bind:value={supplierId} class="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm">
-              <option value="">— none —</option>
-              {#each customers as c}
-                <option value={c.id}>{c.name}</option>
+            Project
+            <select bind:value={projectId} class="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm">
+              <option value="">No project</option>
+              {#each projects as project}
+                <option value={project.id}>{project.name}</option>
               {/each}
             </select>
+            <span class="text-[11px] text-zinc-500">
+              Connect this expense directly to a project.
+            </span>
           </label>
         </div>
 
@@ -234,7 +239,7 @@
           {/if}
           <div class="overflow-x-auto rounded-lg border border-zinc-200">
             <table class="w-full min-w-[480px] text-left text-sm">
-              <thead>
+              <thead class="sticky top-0 z-10">
                 <tr class="bg-zinc-50 text-[11px] font-bold uppercase tracking-wide text-zinc-500">
                   <th class="px-3 py-2" scope="col">Description</th>
                   <th class="px-3 py-2 text-right" scope="col">Qty</th>
@@ -297,41 +302,6 @@
             <Plus class="h-3.5 w-3.5" aria-hidden="true" /> Add line
           </button>
         </fieldset>
-
-        <div class="mt-6 rounded-lg border border-zinc-200 bg-zinc-50/60 p-4">
-          <label class="flex items-center gap-2 text-sm font-semibold text-zinc-800">
-            <input type="checkbox" bind:checked={isOrder} class="h-4 w-4" />
-            This expense is a purchase order (goods on the way)
-            <InfoBox helpKey="expense.order" />
-          </label>
-          {#if isOrder}
-            <div class="mt-3 grid gap-3 sm:grid-cols-2">
-              <label class="grid gap-1.5 text-xs font-semibold text-zinc-700">
-                SKU to receive
-                <select
-                  bind:value={inventoryId}
-                  class="rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-sm"
-                >
-                  <option value="">— none —</option>
-                  {#each inventory as sku}
-                    <option value={sku.id}>{sku.code} · {sku.name}</option>
-                  {/each}
-                </select>
-                {#if linkedSku}
-                  <span class="text-[11px] text-zinc-500">On hand {linkedSku.qty} · ordered {linkedSku.orderedQty ?? 0}</span>
-                {/if}
-              </label>
-              <label class="grid gap-1.5 text-xs font-semibold text-zinc-700">
-                ETA (optional)
-                <input
-                  type="date"
-                  bind:value={orderEta}
-                  class="rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-sm"
-                />
-              </label>
-            </div>
-          {/if}
-        </div>
 
         <p class="mt-5 flex items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50/60 px-4 py-2 text-sm">
           <span class="text-zinc-500">Total</span>

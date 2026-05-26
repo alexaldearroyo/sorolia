@@ -97,7 +97,7 @@
 
     <div class="mt-4 overflow-x-auto rounded-lg border border-zinc-200 dark:border-slate-700">
       <table class="w-full min-w-[640px] text-left text-sm">
-        <thead>
+        <thead class="sticky top-0 z-10">
           <tr class="border-b border-zinc-200 bg-zinc-50 text-xs font-bold uppercase tracking-wide text-zinc-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
             <th class="px-4 py-3" scope="col">Name</th>
             <th class="px-4 py-3" scope="col">Email</th>

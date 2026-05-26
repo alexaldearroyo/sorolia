@@ -61,6 +61,18 @@
     ).length;
   }
 
+  function supplierOpenCount() {
+    return 0;
+  }
+
+  function supplierOverdueCount(cid) {
+    return openCount(cid);
+  }
+
+  function pastCount(row) {
+    return Math.max(0, Math.round(Number(row?.past) || 0));
+  }
+
   function paidTotal(cid) {
     return invoices.filter((i) => i.customerId === cid && i.status === 'Paid').reduce((s, i) => s + i.amount, 0);
   }
@@ -200,10 +212,25 @@
           </div>
           <p class="mt-1 text-xs text-zinc-500 dark:text-slate-400">{c.country} · {c.segment}</p>
           <dl class="mt-3 grid grid-cols-2 gap-2 text-xs text-zinc-600 dark:text-slate-300">
-            <div>
-              <dt class="text-[10px] font-bold uppercase tracking-wide text-zinc-500 dark:text-slate-400">Open / overdue</dt>
-              <dd class="text-sm tabular-nums text-zinc-800 dark:text-slate-100">{openCount(c.id)}</dd>
-            </div>
+            {#if kindFilter === 'supplier'}
+              <div>
+                <dt class="text-[10px] font-bold uppercase tracking-wide text-zinc-500 dark:text-slate-400">Open</dt>
+                <dd class="text-sm tabular-nums text-zinc-800 dark:text-slate-100">{supplierOpenCount()}</dd>
+              </div>
+              <div>
+                <dt class="text-[10px] font-bold uppercase tracking-wide text-zinc-500 dark:text-slate-400">Overdue</dt>
+                <dd class="text-sm tabular-nums text-zinc-800 dark:text-slate-100">{supplierOverdueCount(c.id)}</dd>
+              </div>
+              <div>
+                <dt class="text-[10px] font-bold uppercase tracking-wide text-zinc-500 dark:text-slate-400">Past</dt>
+                <dd class="text-sm tabular-nums text-zinc-800 dark:text-slate-100">{pastCount(c)}</dd>
+              </div>
+            {:else}
+              <div>
+                <dt class="text-[10px] font-bold uppercase tracking-wide text-zinc-500 dark:text-slate-400">Open / overdue</dt>
+                <dd class="text-sm tabular-nums text-zinc-800 dark:text-slate-100">{openCount(c.id)}</dd>
+              </div>
+            {/if}
             <div class="text-right">
               <dt class="text-[10px] font-bold uppercase tracking-wide text-zinc-500 dark:text-slate-400">Paid</dt>
               <dd class="text-sm font-semibold tabular-nums text-zinc-900 dark:text-slate-100">{currency(paidTotal(c.id))}</dd>
@@ -244,14 +271,20 @@
 
     <!-- Desktop: table -->
     <div class="mt-5 hidden overflow-x-auto rounded-lg border border-zinc-200 md:block dark:border-slate-700">
-      <table class="w-full min-w-[760px] text-left text-sm">
+      <table class="w-full min-w-[820px] text-left text-sm">
         <caption class="sr-only">Customer master directory · click a row to open details</caption>
-        <thead>
+        <thead class="sticky top-0 z-10">
           <tr class="border-b border-zinc-200 bg-zinc-50 text-xs font-bold uppercase tracking-wide text-zinc-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
             <th class="px-4 py-3" scope="col">Customer</th>
             <th class="px-4 py-3" scope="col">Segment</th>
             <th class="px-4 py-3" scope="col">Health</th>
-            <th class="px-4 py-3 text-right" scope="col">Open / overdue</th>
+            {#if kindFilter === 'supplier'}
+              <th class="px-4 py-3 text-right" scope="col">Open</th>
+              <th class="px-4 py-3 text-right" scope="col">Overdue</th>
+              <th class="px-4 py-3 text-right" scope="col">Past</th>
+            {:else}
+              <th class="px-4 py-3 text-right" scope="col">Open / overdue</th>
+            {/if}
             <th class="px-4 py-3 text-right" scope="col">Paid (demo)</th>
             <th class="px-4 py-3 text-right" scope="col">Actions</th>
           </tr>
@@ -275,7 +308,13 @@
                   {c.health}
                 </span>
               </td>
-              <td class="px-4 py-3 text-right tabular-nums text-zinc-800 dark:text-slate-200">{openCount(c.id)}</td>
+              {#if kindFilter === 'supplier'}
+                <td class="px-4 py-3 text-right tabular-nums text-zinc-800 dark:text-slate-200">{supplierOpenCount()}</td>
+                <td class="px-4 py-3 text-right tabular-nums text-zinc-800 dark:text-slate-200">{supplierOverdueCount(c.id)}</td>
+                <td class="px-4 py-3 text-right tabular-nums text-zinc-800 dark:text-slate-200">{pastCount(c)}</td>
+              {:else}
+                <td class="px-4 py-3 text-right tabular-nums text-zinc-800 dark:text-slate-200">{openCount(c.id)}</td>
+              {/if}
               <td class="px-4 py-3 text-right font-semibold tabular-nums text-zinc-900 dark:text-slate-100">{currency(paidTotal(c.id))}</td>
               <td class="px-4 py-3 text-right">
                 <details data-row-menu class="relative inline-block">

@@ -7,7 +7,7 @@
   import { deDateToIso, isoDateToDe, expectedDueFromTerms } from '../workspaceActions.js';
   import { useEscape } from '../escape.js';
   import { lockDialogFocus } from '../dialogFocus.js';
-  import { summarizeLines, emptyLineItem } from '../invoiceMath.js';
+  import { summarizeLines, lineNetTotal, emptyLineItem } from '../invoiceMath.js';
   import { formatMoney } from '../fx.js';
   import InfoBox from './InfoBox.svelte';
 
@@ -15,6 +15,7 @@
     editor,
     draftRow,
     customers,
+    projects = [],
     inventory = [],
     settings = null,
     canDelete = true,
@@ -35,6 +36,7 @@
   let customerInlineVatId = $state('');
   let customerInlineIsPrivate = $state(false);
   let useInlineCustomer = $state(false);
+  let projectId = $state('');
 
   let dueIso = $state('');
   let status = $state('Offer');
@@ -76,6 +78,7 @@
     customerInlineIsPrivate = false;
     if (editor.mode === 'create') {
       customerId = customers[0]?.id ?? '';
+      projectId = '';
       status = 'Offer';
       title = '';
       dueIso = plusDaysIso(defaultTermsDays(customerId));
@@ -86,6 +89,7 @@
       items = [{ ...emptyLineItem(), vatRate: defaultVat() }];
     } else if (draftRow) {
       customerId = draftRow.customerId;
+      projectId = draftRow.projectId ?? '';
       status = draftRow.status;
       title = draftRow.title ?? '';
       dueIso = deDateToIso(draftRow.due) || plusDaysIso(defaultTermsDays(draftRow.customerId));
@@ -103,6 +107,7 @@
         description: it.description ?? '',
         qty: it.qty ?? 1,
         unitPrice: it.unitPrice ?? 0,
+        discount: it.discount ?? 0,
         vatRate: it.vatRate ?? defaultVat(),
         skuId: it.skuId ?? ''
       }));
@@ -154,7 +159,7 @@
     if (sku && !items[idx]?.description?.trim()) {
       patch.description = `${sku.code} · ${sku.name}`;
     }
-    if (sku && (!items[idx]?.unitPrice || Number(items[idx].unitPrice) === 0)) {
+    if (sku) {
       patch.unitPrice = sku.unitCost ?? 0;
     }
     updateLine(idx, patch);
@@ -164,6 +169,14 @@
     if (editor?.mode !== 'create') return;
     dueIso = plusDaysIso(defaultTermsDays(customerId));
   }
+
+  const availableProjects = $derived(
+    useInlineCustomer ? projects : projects.filter((p) => !customerId || p.customerId === customerId)
+  );
+
+  $effect(() => {
+    if (projectId && !availableProjects.some((p) => p.id === projectId)) projectId = '';
+  });
 
   function validate() {
     clearErrors();
@@ -217,6 +230,7 @@
     return {
       customerId: useInlineCustomer ? null : customerId,
       inlineCustomer: buildInlineCustomerPayload(),
+      projectId: projectId || null,
       status,
       title: title.trim(),
       dueDe,
@@ -258,7 +272,13 @@
 
   const open = $derived(editor !== null);
   const heading = $derived(
-    editor?.mode === 'create' ? 'New offer' : draftRow ? `Edit ${draftRow.id}` : 'Edit offer'
+    editor?.mode === 'create'
+      ? status === 'Offer'
+        ? 'New offer'
+        : 'New invoice'
+      : draftRow
+      ? `Edit ${draftRow.id}`
+      : 'Edit offer'
   );
 
   const vatOptions = $derived(settings?.vatRates?.length ? settings.vatRates : [0, 7, 19]);
@@ -398,13 +418,24 @@
             {/if}
           </div>
 
+          <label class="grid gap-1.5 text-sm font-semibold text-zinc-700 sm:col-span-2">
+            Project
+            <select bind:value={projectId} class="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm">
+              <option value="">No project</option>
+              {#each availableProjects as project}
+                <option value={project.id}>{project.name}</option>
+              {/each}
+            </select>
+            <span class="text-[11px] text-zinc-500">
+              Connect this invoice directly to a project.
+            </span>
+          </label>
+
           <label class="grid gap-1.5 text-sm font-semibold text-zinc-700">
             Status
             <select bind:value={status} class="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm">
-              <option>Offer</option>
-              <option>Open</option>
-              <option>Partially paid</option>
-              <option>Paid</option>
+              <option value="Offer">Offer</option>
+              <option value="Open">Invoice</option>
             </select>
             <span class="text-[11px] text-zinc-500">
               {#if status === 'Offer'}
@@ -432,7 +463,7 @@
             </label>
           {/if}
 
-          <label class="grid gap-1.5 text-sm font-semibold text-zinc-700">
+          <label class="grid gap-1.5 text-sm font-semibold text-zinc-700 sm:col-span-2">
             <span class="flex items-center gap-1.5">
               Tax key (Steuerschlüssel)
               <InfoBox helpKey="invoice.taxkey" />
@@ -442,7 +473,7 @@
                 {#each TAX_KEY_PRESETS as k}
                   <option value={k}>{k}</option>
                 {/each}
-                <option value="custom">Custom…</option>
+                <option value="custom">custom</option>
               </select>
               {#if taxKey === 'custom'}
                 <input
@@ -486,13 +517,14 @@
           {/if}
 
           <div class="overflow-x-auto rounded-lg border border-zinc-200">
-            <table class="w-full min-w-[640px] text-left text-sm">
-              <thead>
+            <table class="w-full min-w-[720px] text-left text-sm">
+              <thead class="sticky top-0 z-10">
                 <tr class="bg-zinc-50 text-[11px] font-bold uppercase tracking-wide text-zinc-500">
                   <th class="px-3 py-2" scope="col">Description</th>
                   <th class="px-3 py-2" scope="col">SKU</th>
                   <th class="px-3 py-2 text-right" scope="col">Qty</th>
                   <th class="px-3 py-2 text-right" scope="col">Unit</th>
+                  <th class="px-3 py-2 text-right" scope="col">Discount</th>
                   <th class="px-3 py-2 text-right" scope="col">VAT %</th>
                   <th class="px-3 py-2 text-right" scope="col">Net</th>
                   <th class="px-3 py-2" scope="col"></th>
@@ -539,7 +571,20 @@
                         step="1"
                         value={item.unitPrice}
                         oninput={(e) => updateLine(idx, { unitPrice: e.currentTarget.value })}
-                        class="w-24 rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-right text-sm tabular-nums"
+                        disabled={Boolean(item.skuId)}
+                        title={item.skuId ? 'Fixed to the picked SKU unit cost' : 'Unit price'}
+                        class="w-24 rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-right text-sm tabular-nums disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-500"
+                      />
+                    </td>
+                    <td class="px-3 py-2 text-right">
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="1"
+                        value={item.discount ?? 0}
+                        oninput={(e) => updateLine(idx, { discount: e.currentTarget.value })}
+                        class="w-20 rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-right text-sm tabular-nums"
                       />
                     </td>
                     <td class="px-3 py-2 text-right">
@@ -554,7 +599,7 @@
                       </select>
                     </td>
                     <td class="px-3 py-2 text-right tabular-nums text-zinc-800">
-                      {fmt((Number(item.qty) || 0) * (Number(item.unitPrice) || 0))}
+                      {fmt(lineNetTotal(item))}
                     </td>
                     <td class="px-3 py-2 text-right">
                       <button

@@ -1,4 +1,4 @@
-import { formatDe, formatDePlusDays, parseDeDate } from './format.js';
+import { daysUntilDue, formatDe, formatDePlusDays, parseDeDate } from './format.js';
 import { summarizeLines } from './invoiceMath.js';
 
 function nextNumericId(prefix, rows, idField = 'id') {
@@ -244,6 +244,7 @@ function normalizeItems(items = []) {
       description: String(it.description ?? '').trim(),
       qty: Math.max(0, Number(it.qty) || 0),
       unitPrice: Math.max(0, Math.round(Number(it.unitPrice) || 0)),
+      discount: Math.min(100, Math.max(0, Number(it.discount) || 0)),
       vatRate: Number(it.vatRate ?? 0),
       skuId: it.skuId || null
     }));
@@ -267,6 +268,7 @@ export function buildNewInvoice(invoices, payload, { settings, customer } = {}) 
   return {
     id,
     customerId: payload.customerId,
+    projectId: payload.projectId || null,
     title: String(payload.title ?? '').trim(),
     created,
     due,
@@ -280,6 +282,18 @@ export function buildNewInvoice(invoices, payload, { settings, customer } = {}) 
     items,
     dunning: [{ kind: status === 'Offer' ? 'issued' : 'issued', at: created, note: status === 'Offer' ? 'Offer drafted' : 'Issued from workspace' }]
   };
+}
+
+/** Reopening needs a future due date or the row stays effectively "Overdue". */
+function refreshDueOnReopen(existing, nextStatus) {
+  if (nextStatus !== 'Open') return null;
+  const from = String(existing.status ?? '');
+  const reopening =
+    from === 'Paid' || from === 'Overdue' || from === 'Partially paid' || from === 'Open';
+  if (!reopening) return null;
+  const days = daysUntilDue(existing.due);
+  if (days != null && days >= 0) return null;
+  return formatDePlusDays(14);
 }
 
 export function applyInvoicePatch(existing, patch) {
@@ -299,6 +313,10 @@ export function applyInvoicePatch(existing, patch) {
   } else if (existing.status === 'Offer' && nextStatus !== 'Offer' && !patch.due && !patch.dueDe) {
     next.due = formatDePlusDays(14);
   }
+  const reopenedDue = refreshDueOnReopen(existing, nextStatus);
+  if (reopenedDue && !patch.due && !patch.dueDe) {
+    next.due = reopenedDue;
+  }
   if (patch.status && patch.status !== existing.status) {
     const today = formatDe();
     const dunning = Array.isArray(existing.dunning) ? [...existing.dunning] : [];
@@ -307,6 +325,8 @@ export function applyInvoicePatch(existing, patch) {
       next.amountPaid = next.amount;
     } else if (patch.status === 'Open' && existing.status === 'Offer') {
       dunning.push({ kind: 'issued', at: today, note: 'Offer converted to issued invoice' });
+    } else if (patch.status === 'Open' && reopenedDue) {
+      dunning.push({ kind: 'issued', at: today, note: `Reopened · new due ${reopenedDue}` });
     } else if (patch.status === 'Partially paid') {
       const partial = Number(patch.amountPaid ?? existing.amountPaid ?? 0);
       dunning.push({
@@ -375,6 +395,7 @@ export function cancelInvoiceWithCreditNote(invoices, invoiceId, { settings, rea
     isCreditNote: true,
     referenceInvoiceId: original.id,
     customerId: original.customerId,
+    projectId: original.projectId ?? null,
     created: issuedAt,
     due: issuedAt,
     status: 'Credit note',
@@ -387,6 +408,7 @@ export function cancelInvoiceWithCreditNote(invoices, invoiceId, { settings, rea
       description: `Reversal · ${it.description ?? ''}`.trim(),
       qty: -Math.abs(Number(it.qty) || 0),
       unitPrice: Math.max(0, Math.round(Number(it.unitPrice) || 0)),
+      discount: Math.min(100, Math.max(0, Number(it.discount) || 0)),
       vatRate: Number(it.vatRate ?? 0)
     })),
     dunning: [
@@ -468,6 +490,7 @@ export function instantiateTemplate(template, invoices, customers, settings) {
     description: String(it.description ?? '').replace('{{month}}', monthLabel),
     qty: Number(it.qty) || 0,
     unitPrice: Math.round(Number(it.unitPrice) || 0),
+    discount: Math.min(100, Math.max(0, Number(it.discount) || 0)),
     vatRate: Number(it.vatRate ?? settings?.defaultVat ?? 19)
   }));
   const draft = buildNewInvoice(
@@ -525,6 +548,7 @@ export function createExpenseRow({
   items,
   date,
   supplierCustomerId,
+  projectId,
   id,
   submittedById,
   isOrder,
@@ -554,6 +578,7 @@ export function createExpenseRow({
     items: normalizedItems,
     date: date || formatDe(),
     supplierCustomerId: supplierCustomerId || null,
+    projectId: projectId || null,
     submittedById: submittedById || null,
     isOrder: Boolean(isOrder),
     inventoryId: inventoryId || null,

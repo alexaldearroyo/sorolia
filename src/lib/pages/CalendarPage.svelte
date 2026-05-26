@@ -7,6 +7,7 @@
     eventsForDay,
     getCalendarGrid,
     formatIsoToDe,
+    isoKeyFromDate,
     buildProjectTimelineIndex,
     projectsActiveOnDay,
     timelineMarker
@@ -30,32 +31,64 @@
   let eventKindFilter = $state('all');
 
   let showProjectTimelines = $state(
-    loadPref('calendarProjectTimelines', 'false', ['true', 'false']) === 'true'
+    loadPref('calendarProjectTimelines', 'true', ['true', 'false']) === 'true'
   );
+  /** @type {'month' | 'week' | 'year'} */
+  let calendarView = $state(loadPref('calendarView', 'month', ['month', 'week', 'year']));
 
-  const FILTER_OPTIONS = /** @type {const} */ ([
+  const FILTER_OPTIONS_ALL = /** @type {const} */ ([
     { id: 'all', label: 'All' },
     { id: 'invoice-due', label: 'Dues' },
     { id: 'invoice-created', label: 'Issued' },
     { id: 'expense', label: 'Expenses' },
     { id: 'project-review', label: 'Reviews' }
   ]);
+  const filterOptions = $derived(
+    projects.length ? FILTER_OPTIONS_ALL : FILTER_OPTIONS_ALL.filter((o) => o.id !== 'project-review')
+  );
 
   const CELL_LINE_LIMIT = 2;
 
-  let viewYear = $state(new Date().getFullYear());
-  let viewMonth = $state(new Date().getMonth());
+  const today = new Date();
+  let viewYear = $state(today.getFullYear());
+  let viewMonth = $state(today.getMonth());
+  let viewDay = $state(today.getDate());
 
-  function prevMonth() {
-    const d = new Date(viewYear, viewMonth - 1, 1);
-    viewYear = d.getFullYear();
-    viewMonth = d.getMonth();
+  function anchorDate() {
+    return new Date(viewYear, viewMonth, viewDay);
   }
 
-  function nextMonth() {
-    const d = new Date(viewYear, viewMonth + 1, 1);
+  function setAnchor(d) {
     viewYear = d.getFullYear();
     viewMonth = d.getMonth();
+    viewDay = d.getDate();
+  }
+
+  function weekGrid(date) {
+    const startDow = (date.getDay() + 6) % 7;
+    const start = new Date(date);
+    start.setDate(date.getDate() - startDow);
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      return { date: d, inMonth: true, isoKey: isoKeyFromDate(d) };
+    });
+  }
+
+  function prevPeriod() {
+    const d = anchorDate();
+    if (calendarView === 'week') d.setDate(d.getDate() - 7);
+    else if (calendarView === 'year') d.setFullYear(d.getFullYear() - 1);
+    else d.setMonth(d.getMonth() - 1, 1);
+    setAnchor(d);
+  }
+
+  function nextPeriod() {
+    const d = anchorDate();
+    if (calendarView === 'week') d.setDate(d.getDate() + 7);
+    else if (calendarView === 'year') d.setFullYear(d.getFullYear() + 1);
+    else d.setMonth(d.getMonth() + 1, 1);
+    setAnchor(d);
   }
 
   let eventsRaw = $derived(collectWorkspaceEvents(invoices, expenseItems, projects, customers));
@@ -67,26 +100,65 @@
   });
   let eventMap = $derived(eventsByDay(eventsFlat));
 
-  let grid = $derived(getCalendarGrid(viewYear, viewMonth));
+  let grid = $derived(
+    calendarView === 'week' ? weekGrid(anchorDate()) : getCalendarGrid(viewYear, viewMonth)
+  );
 
   let selectedDay = $state(/** @type {string | null} */ (null));
 
   $effect(() => {
     viewYear;
     viewMonth;
+    viewDay;
+    calendarView;
     eventKindFilter;
     selectedDay = null;
   });
 
   $effect(() => savePref('calendarProjectTimelines', showProjectTimelines ? 'true' : 'false'));
+  $effect(() => savePref('calendarView', calendarView));
+  $effect(() => {
+    if (!projects.length && eventKindFilter === 'project-review') eventKindFilter = 'all';
+  });
 
   let selectedEvents = $derived(selectedDay ? eventsForDay(eventMap, selectedDay) : []);
   let selectedTimelines = $derived(
     selectedDay && showProjectTimelines ? projectsActiveOnDay(timelineIndex, selectedDay) : []
   );
 
-  const monthTitle = $derived(
-    new Date(viewYear, viewMonth, 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
+  const periodTitle = $derived.by(() => {
+    const d = anchorDate();
+    if (calendarView === 'year') return String(viewYear);
+    if (calendarView === 'week') {
+      const week = weekGrid(d);
+      return `${week[0].date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} - ${week[6].date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+    }
+    return new Date(viewYear, viewMonth, 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+  });
+
+  function monthRange(monthIndex) {
+    const start = new Date(viewYear, monthIndex, 1);
+    const end = new Date(viewYear, monthIndex + 1, 0);
+    return { startKey: isoKeyFromDate(start), endKey: isoKeyFromDate(end) };
+  }
+
+  function monthEventCount(monthIndex) {
+    const { startKey, endKey } = monthRange(monthIndex);
+    return eventsFlat.filter((ev) => ev.dayKey >= startKey && ev.dayKey <= endKey).length;
+  }
+
+  function monthProjects(monthIndex) {
+    const { startKey, endKey } = monthRange(monthIndex);
+    return timelineIndex.filter((span) => span.startKey <= endKey && span.endKey >= startKey);
+  }
+
+  const yearMonths = $derived(
+    Array.from({ length: 12 }, (_, monthIndex) => ({
+      monthIndex,
+      label: new Date(viewYear, monthIndex, 1).toLocaleDateString('en-GB', { month: 'short' }),
+      eventCount: monthEventCount(monthIndex),
+      projects: monthProjects(monthIndex)
+    }))
   );
 
   function dotClass(kind) {
@@ -171,7 +243,7 @@
 >
   <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
     <div class="flex flex-wrap items-center gap-1.5" role="group" aria-label="Event types shown on the calendar">
-      {#each FILTER_OPTIONS as opt}
+      {#each filterOptions as opt}
         <button
           type="button"
           aria-pressed={eventKindFilter === opt.id}
@@ -182,7 +254,7 @@
         >
           {opt.label}
         </button>
-        {#if opt.id === 'project-review'}
+        {#if opt.id === 'project-review' && projects.length}
           <label
             class="inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide transition {showProjectTimelines
               ? 'border-emerald-700 bg-emerald-50 text-emerald-900 dark:border-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-100'
@@ -199,23 +271,37 @@
         {/if}
       {/each}
     </div>
-    <div class="flex items-center justify-end gap-2 sm:justify-start">
+    <div class="flex flex-wrap items-center justify-end gap-2 sm:justify-start">
+      <div class="inline-flex rounded-lg border border-zinc-200 bg-zinc-50 p-0.5 dark:border-slate-700 dark:bg-slate-800" role="group" aria-label="Calendar view">
+        {#each [{ id: 'month', label: 'Month' }, { id: 'week', label: 'Week' }, { id: 'year', label: 'Year' }] as view}
+          <button
+            type="button"
+            aria-pressed={calendarView === view.id}
+            class="rounded-md px-2.5 py-1.5 text-xs font-semibold {calendarView === view.id
+              ? 'bg-white text-leah-900 shadow-sm dark:bg-slate-900 dark:text-slate-100'
+              : 'text-zinc-600 hover:text-zinc-900 dark:text-slate-300 dark:hover:text-slate-100'}"
+            onclick={() => (calendarView = view.id)}
+          >
+            {view.label}
+          </button>
+        {/each}
+      </div>
       <button
         type="button"
         class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-200 bg-white hover:bg-zinc-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
-        onclick={prevMonth}
-        aria-label="Previous month"
-        title="Previous month"
+        onclick={prevPeriod}
+        aria-label="Previous period"
+        title="Previous period"
       >
         <ChevronLeft class="h-4 w-4" aria-hidden="true" />
       </button>
-      <span class="min-w-[10rem] text-center text-sm font-bold text-zinc-900 dark:text-slate-100">{monthTitle}</span>
+      <span class="min-w-[10rem] text-center text-sm font-bold text-zinc-900 dark:text-slate-100">{periodTitle}</span>
       <button
         type="button"
         class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-200 bg-white hover:bg-zinc-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
-        onclick={nextMonth}
-        aria-label="Next month"
-        title="Next month"
+        onclick={nextPeriod}
+        aria-label="Next period"
+        title="Next period"
       >
         <ChevronRight class="h-4 w-4" aria-hidden="true" />
       </button>
@@ -224,70 +310,103 @@
 
   <div class="mt-4 grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
     <div class="min-w-0 overflow-x-auto">
-      <div class="grid grid-cols-7 gap-px rounded-lg border border-zinc-200 bg-zinc-200 text-center text-[11px] font-bold uppercase tracking-wide text-zinc-500 dark:border-slate-700 dark:bg-slate-700 dark:text-slate-400">
-        {#each ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as wd}
-          <div class="bg-zinc-50 py-2 dark:bg-slate-800">{wd}</div>
-        {/each}
-      </div>
-      <div class="grid grid-cols-7 gap-px rounded-b-lg border border-t-0 border-zinc-200 bg-zinc-200 dark:border-slate-700 dark:bg-slate-700">
-        {#each grid as cell}
-          {@const dayEvents = dayEventsFiltered(cell.isoKey)}
-          {@const display = cellLines(cell.isoKey, dayEvents)}
-          <button
-            type="button"
-            aria-label={cellAriaLabel(cell, dayEvents, display.moreCount)}
-            aria-pressed={selectedDay === cell.isoKey}
-            class="min-h-[5.5rem] bg-white p-1.5 text-left transition hover:bg-zinc-50 dark:bg-slate-900 dark:hover:bg-slate-800 sm:min-h-[6.5rem] {showProjectTimelines &&
-            projectsActiveOnDay(timelineIndex, cell.isoKey).length
-              ? 'bg-emerald-50/30 dark:bg-emerald-950/20'
-              : ''} {!cell.inMonth ? 'opacity-40' : ''} {selectedDay === cell.isoKey
-              ? 'ring-2 ring-inset ring-leah-700'
-              : ''}"
-            onclick={() => (selectedDay = cell.isoKey)}
-          >
-            <span class="text-xs font-semibold text-zinc-800 dark:text-slate-200" aria-hidden="true">{cell.date.getDate()}</span>
-            <div class="mt-1 space-y-0.5 overflow-hidden">
-              {#each display.lines as line}
-                {#if line.type === 'event'}
-                  <p
-                    class="flex min-w-0 items-center gap-1 text-[11px] leading-snug text-zinc-600 dark:text-slate-300 sm:text-xs"
-                    title={line.ev.title}
-                  >
-                    <span class="h-2 w-2 shrink-0 rounded-full {dotClass(line.ev.kind)}" aria-hidden="true"></span>
-                    <span class="min-w-0 truncate font-medium">{line.ev.summary}</span>
-                    {#if line.ev.amount != null}
-                      <span class="ml-auto shrink-0 tabular-nums text-zinc-400 dark:text-slate-500"
-                        >{invoiceAmount(line.ev.amount, line.ev.currency)}</span
-                      >
-                    {/if}
-                  </p>
-                {:else}
-                  <p
-                    class="flex min-w-0 items-center gap-1 rounded-sm border-l-2 border-emerald-500 bg-emerald-50/90 pl-1 text-[11px] leading-snug text-emerald-950 dark:border-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-100 sm:text-xs"
-                    title="{line.span.name} · delivery window"
-                  >
-                    <span class="min-w-0 truncate font-medium">{line.span.name}</span>
-                    {#if markerLabel(line.marker)}
-                      <span class="shrink-0 text-[9px] font-bold uppercase tracking-wide opacity-80"
-                        >{markerLabel(line.marker)}</span
-                      >
-                    {/if}
-                  </p>
-                {/if}
-              {/each}
-              {#if display.moreCount > 0}
-                <p class="text-[11px] font-bold text-zinc-400 dark:text-slate-500 sm:text-xs">+{display.moreCount} more</p>
+      {#if calendarView === 'year'}
+        <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {#each yearMonths as month}
+            <button
+              type="button"
+              class="rounded-xl border border-zinc-200 bg-white p-3 text-left transition hover:border-leah-300 hover:bg-zinc-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800"
+              onclick={() => {
+                viewMonth = month.monthIndex;
+                viewDay = 1;
+                calendarView = 'month';
+              }}
+            >
+              <span class="text-sm font-bold text-zinc-900 dark:text-slate-100">{month.label}</span>
+              <span class="mt-1 block text-xs text-zinc-500 dark:text-slate-400">
+                {month.eventCount} event{month.eventCount === 1 ? '' : 's'} · {month.projects.length} project window{month.projects.length === 1 ? '' : 's'}
+              </span>
+              {#if showProjectTimelines && month.projects.length}
+                <span class="mt-2 flex flex-wrap gap-1">
+                  {#each month.projects.slice(0, 3) as span}
+                    <span class="max-w-full truncate rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-100">{span.name}</span>
+                  {/each}
+                  {#if month.projects.length > 3}
+                    <span class="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold text-zinc-500 dark:bg-slate-800 dark:text-slate-300">+{month.projects.length - 3}</span>
+                  {/if}
+                </span>
               {/if}
-            </div>
-          </button>
-        {/each}
-      </div>
+            </button>
+          {/each}
+        </div>
+      {:else}
+        <div class="grid grid-cols-7 gap-px rounded-lg border border-zinc-200 bg-zinc-200 text-center text-[11px] font-bold uppercase tracking-wide text-zinc-500 dark:border-slate-700 dark:bg-slate-700 dark:text-slate-400">
+          {#each ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as wd}
+            <div class="bg-zinc-50 py-2 dark:bg-slate-800">{wd}</div>
+          {/each}
+        </div>
+        <div class="grid grid-cols-7 gap-px rounded-b-lg border border-t-0 border-zinc-200 bg-zinc-200 dark:border-slate-700 dark:bg-slate-700">
+          {#each grid as cell}
+            {@const dayEvents = dayEventsFiltered(cell.isoKey)}
+            {@const display = cellLines(cell.isoKey, dayEvents)}
+            <button
+              type="button"
+              aria-label={cellAriaLabel(cell, dayEvents, display.moreCount)}
+              aria-pressed={selectedDay === cell.isoKey}
+              class="{calendarView === 'week' ? 'min-h-[11rem] sm:min-h-[14rem]' : 'min-h-[5.5rem] sm:min-h-[6.5rem]'} bg-white p-1.5 text-left transition hover:bg-zinc-50 dark:bg-slate-900 dark:hover:bg-slate-800 {showProjectTimelines &&
+              projectsActiveOnDay(timelineIndex, cell.isoKey).length
+                ? 'bg-emerald-50/30 dark:bg-emerald-950/20'
+                : ''} {!cell.inMonth ? 'opacity-40' : ''} {selectedDay === cell.isoKey
+                ? 'ring-2 ring-inset ring-leah-700'
+                : ''}"
+              onclick={() => (selectedDay = cell.isoKey)}
+            >
+              <span class="text-xs font-semibold text-zinc-800 dark:text-slate-200" aria-hidden="true">{cell.date.getDate()}</span>
+              <div class="mt-1 space-y-0.5 overflow-hidden">
+                {#each display.lines as line}
+                  {#if line.type === 'event'}
+                    <p
+                      class="flex min-w-0 items-center gap-1 text-[11px] leading-snug text-zinc-600 dark:text-slate-300 sm:text-xs"
+                      title={line.ev.title}
+                    >
+                      <span class="h-2 w-2 shrink-0 rounded-full {dotClass(line.ev.kind)}" aria-hidden="true"></span>
+                      <span class="min-w-0 truncate font-medium">{line.ev.summary}</span>
+                      {#if line.ev.amount != null}
+                        <span class="ml-auto shrink-0 tabular-nums text-zinc-400 dark:text-slate-500"
+                          >{invoiceAmount(line.ev.amount, line.ev.currency)}</span
+                        >
+                      {/if}
+                    </p>
+                  {:else}
+                    <p
+                      class="flex min-w-0 items-center gap-1 rounded-sm border-l-2 border-emerald-500 bg-emerald-50/90 pl-1 text-[11px] leading-snug text-emerald-950 dark:border-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-100 sm:text-xs"
+                      title="{line.span.name} · delivery window"
+                    >
+                      <span class="min-w-0 truncate font-medium">{line.span.name}</span>
+                      {#if markerLabel(line.marker)}
+                        <span class="shrink-0 text-[9px] font-bold uppercase tracking-wide opacity-80"
+                          >{markerLabel(line.marker)}</span
+                        >
+                      {/if}
+                    </p>
+                  {/if}
+                {/each}
+                {#if display.moreCount > 0}
+                  <p class="text-[11px] font-bold text-zinc-400 dark:text-slate-500 sm:text-xs">+{display.moreCount} more</p>
+                {/if}
+              </div>
+            </button>
+          {/each}
+        </div>
+      {/if}
       <div class="mt-3 flex flex-wrap gap-3 text-xs text-zinc-600 dark:text-slate-300">
         <span class="inline-flex items-center gap-1.5"><i class="h-2 w-2 rounded-full bg-rose-500"></i> Invoice due</span>
         <span class="inline-flex items-center gap-1.5"><i class="h-2 w-2 rounded-full bg-sky-500"></i> Invoice issued</span>
         <span class="inline-flex items-center gap-1.5"><i class="h-2 w-2 rounded-full bg-amber-500"></i> Expense</span>
-        <span class="inline-flex items-center gap-1.5"><i class="h-2 w-2 rounded-full bg-leah-700"></i> Project review</span>
-        {#if showProjectTimelines}
+        {#if projects.length}
+          <span class="inline-flex items-center gap-1.5"><i class="h-2 w-2 rounded-full bg-leah-700"></i> Project review</span>
+        {/if}
+        {#if projects.length && showProjectTimelines}
           <span class="inline-flex items-center gap-1.5"
             ><i class="h-2 w-2 rounded-sm border-l-2 border-emerald-500 bg-emerald-100"></i> Delivery window</span
           >
@@ -350,7 +469,7 @@
         </ul>
       {:else}
         <p class="text-sm text-zinc-600 dark:text-slate-300">
-          Select a day to see invoices, expenses, reviews{#if showProjectTimelines} and active project windows{/if}.
+          Select a day to see invoices and expenses{#if projects.length}, reviews{#if showProjectTimelines} and active project windows{/if}{/if}.
         </p>
       {/if}
     </aside>

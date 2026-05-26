@@ -221,6 +221,7 @@
                 <th class="py-2" scope="col">Description</th>
                 <th class="py-2 text-right" scope="col">Qty</th>
                 <th class="py-2 text-right" scope="col">Unit</th>
+                <th class="py-2 text-right" scope="col">Discount</th>
                 <th class="py-2 text-right" scope="col">VAT</th>
                 <th class="py-2 text-right" scope="col">Net</th>
               </tr>
@@ -231,11 +232,12 @@
                   <td class="py-2 pr-2 text-zinc-800">{item.description || '—'}</td>
                   <td class="py-2 text-right tabular-nums text-zinc-700">{item.qty}</td>
                   <td class="py-2 text-right tabular-nums text-zinc-700">{fmt(Number(item.unitPrice) || 0)}</td>
+                  <td class="py-2 text-right tabular-nums text-zinc-500">{Number(item.discount ?? 0)}%</td>
                   <td class="py-2 text-right tabular-nums text-zinc-500">{Number(item.vatRate ?? 0)}%</td>
                   <td class="py-2 text-right tabular-nums text-zinc-900">{fmt(lineNetTotal(item))}</td>
                 </tr>
               {:else}
-                <tr><td colspan="5" class="py-4 text-center text-sm text-zinc-400">No line items.</td></tr>
+                <tr><td colspan="6" class="py-4 text-center text-sm text-zinc-400">No line items.</td></tr>
               {/each}
             </tbody>
           </table>

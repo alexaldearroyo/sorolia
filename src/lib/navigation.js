@@ -5,6 +5,7 @@ import Package from 'lucide-svelte/icons/package';
 import Users from 'lucide-svelte/icons/users';
 import Truck from 'lucide-svelte/icons/truck';
 import FolderKanban from 'lucide-svelte/icons/folder-kanban';
+import CalendarDays from 'lucide-svelte/icons/calendar-days';
 import Briefcase from 'lucide-svelte/icons/briefcase';
 
 export const menu = [
@@ -15,5 +16,6 @@ export const menu = [
   { id: 'customers', label: 'Customers', key: 'C', icon: Users },
   { id: 'suppliers', label: 'Suppliers', key: 'S', icon: Truck },
   { id: 'projects', label: 'Projects', key: 'P', icon: FolderKanban },
+  { id: 'calendar', label: 'Calendar', key: 'L', icon: CalendarDays },
   { id: 'hr', label: 'People', key: 'R', icon: Briefcase }
 ];

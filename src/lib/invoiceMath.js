@@ -3,11 +3,12 @@
  * editable string state and we still compute clean totals.
  */
 
-/** @param {{qty: number | string, unitPrice: number | string, vatRate?: number | string}} item */
+/** @param {{qty: number | string, unitPrice: number | string, discount?: number | string, vatRate?: number | string}} item */
 export function lineNetTotal(item) {
   const qty = Number(item.qty) || 0;
   const unit = Number(item.unitPrice) || 0;
-  return qty * unit;
+  const discount = Math.min(100, Math.max(0, Number(item.discount ?? 0) || 0));
+  return qty * unit * (1 - discount / 100);
 }
 
 export function lineVatAmount(item) {
@@ -21,7 +22,7 @@ export function lineGrossTotal(item) {
 
 /**
  * Aggregates a list of line items.
- * @param {Array<{qty: number | string, unitPrice: number | string, vatRate?: number | string}>} items
+ * @param {Array<{qty: number | string, unitPrice: number | string, discount?: number | string, vatRate?: number | string}>} items
  */
 export function summarizeLines(items = []) {
   let net = 0;
@@ -51,5 +52,5 @@ export function summarizeLines(items = []) {
 }
 
 export function emptyLineItem() {
-  return { description: '', qty: 1, unitPrice: 0, vatRate: 19 };
+  return { description: '', qty: 1, unitPrice: 0, discount: 0, vatRate: 19 };
 }
