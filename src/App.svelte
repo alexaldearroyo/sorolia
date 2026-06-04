@@ -75,6 +75,8 @@
   import InvoicePreviewModal from './lib/components/InvoicePreviewModal.svelte';
   import ToastHost from './lib/components/ToastHost.svelte';
   import Plus from 'lucide-svelte/icons/plus';
+  import Camera from 'lucide-svelte/icons/camera';
+  import ReceiptCaptureModal from './lib/components/ReceiptCaptureModal.svelte';
   import DashboardPage from './lib/pages/DashboardPage.svelte';
   import InvoicesPage from './lib/pages/InvoicesPage.svelte';
   import ExpensesPage from './lib/pages/ExpensesPage.svelte';
@@ -109,6 +111,7 @@
   let sidebarCollapsed = $state(loadSidebarCollapsed());
   let mobileNavOpen = $state(false);
   let paletteOpen = $state(false);
+  let receiptCaptureOpen = $state(false);
   let persistEnabled = $state(loadPersistFlag());
 
   let invoiceCustomerFilter = $state(null);
@@ -539,6 +542,19 @@
       };
     }
     return null;
+  });
+
+  let secondaryAction = $derived.by(() => {
+    if (active !== 'expenses' || !can(role, 'expenses.write')) return null;
+    return {
+      label: 'Receipt photo',
+      icon: Camera,
+      onClick: () => (receiptCaptureOpen = true)
+    };
+  });
+
+  $effect(() => {
+    if (active !== 'expenses') receiptCaptureOpen = false;
   });
 
   const exportablePages = new Set(['home', 'invoices', 'expenses', 'customers', 'suppliers', 'inventory', 'projects', 'hr']);
@@ -1033,6 +1049,17 @@
       return nextOrdered === (Number(sku.orderedQty) || 0)
         ? sku
         : { ...sku, orderedQty: Math.max(0, nextOrdered) };
+    });
+  }
+
+  function handleReceiptPrototypeConfirm({ saveToVault, sendEmail, emailTo }) {
+    const parts = [];
+    if (saveToVault) parts.push('Would save to your device');
+    if (sendEmail) parts.push(`Would email ${emailTo}`);
+    pushToast({
+      kind: 'info',
+      title: 'Receipt (prototype)',
+      body: parts.length ? `${parts.join(' · ')}` : 'Nothing selected.'
     });
   }
 
@@ -1636,9 +1663,20 @@
           userName={currentUser.name}
           {pageTitle}
           {pageSubtitle}
+          {secondaryAction}
           {primaryAction}
           showExport={showExportButton}
           onExportWorkspace={downloadWorkspaceJson}
+        />
+
+        <ReceiptCaptureModal
+          open={receiptCaptureOpen}
+          defaultEmail={currentUser?.email ?? company.email ?? ''}
+          onClose={() => (receiptCaptureOpen = false)}
+          onConfirm={(opts) => {
+            handleReceiptPrototypeConfirm(opts);
+            receiptCaptureOpen = false;
+          }}
         />
 
         {#key pageKey}

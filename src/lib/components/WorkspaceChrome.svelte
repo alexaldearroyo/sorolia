@@ -12,11 +12,17 @@
     pageTitle,
     pageSubtitle = '',
     /** @type {ChromeAction | null} */
+    secondaryAction = null,
+    /** @type {ChromeAction | null} */
     primaryAction = null,
     showExport = false,
     onExportWorkspace
   } = $props();
 
+  const outlineBtnClass =
+    'inline-flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-4 py-2.5 text-sm font-semibold text-leah-900 shadow-sm hover:bg-zinc-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-leah-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800';
+
+  let SecondaryIcon = $derived(secondaryAction?.icon ?? Download);
   let PrimaryIcon = $derived(primaryAction?.icon ?? Plus);
 </script>
 
@@ -28,14 +34,23 @@
       <p class="mt-1 hidden text-sm text-zinc-500 sm:block dark:text-slate-400">{pageSubtitle}</p>
     {/if}
   </div>
-  {#if showExport || primaryAction}
+  {#if secondaryAction || showExport || primaryAction}
     <div class="flex flex-wrap gap-2">
-      {#if showExport}
+      {#if secondaryAction}
         <button
           type="button"
-          class="inline-flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-4 py-2.5 text-sm font-semibold text-leah-900 shadow-sm hover:bg-zinc-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-leah-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
-          onclick={onExportWorkspace}
+          class={outlineBtnClass}
+          onclick={secondaryAction.onClick}
+          disabled={secondaryAction.disabled}
+          title={secondaryAction.disabled ? secondaryAction.disabledHint : undefined}
+          aria-disabled={secondaryAction.disabled ? 'true' : 'false'}
         >
+          <SecondaryIcon class="h-4 w-4" aria-hidden="true" />
+          {secondaryAction.label}
+        </button>
+      {/if}
+      {#if showExport}
+        <button type="button" class={outlineBtnClass} onclick={onExportWorkspace}>
           <Download class="h-4 w-4" aria-hidden="true" />
           Export workspace
         </button>
